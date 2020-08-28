@@ -1,0 +1,6 @@
+==> Jdk 7
+
+Si problème installation
+
+install glibc.i686 : yum -y install 
+glibc.i686
