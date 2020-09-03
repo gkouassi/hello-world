@@ -1,0 +1,1182 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!-- ====================================================================== 
+     22 févr. 07 10:48:43                                                        
+
+     project  : SOFTInstalller
+     description : Administration du Domaine TIBCO BW6
+                   
+     fxbrun                                                                
+     ====================================================================== -->
+<project name="SOFTInstalller" default="createBW6Services" basedir="..">
+    	
+	<!-- include task definition -->
+	<import file="${basedir}/common/taskdef-scripts.xml"/>
+
+	<!-- include install definition -->
+	<import file="${basedir}/common/scripts_definition.xml"/>
+
+	<!-- include filter definition -->
+	<import file="${basedir}/common/filters.xml"/>
+
+   
+    <!-- ================================= 
+          target: createBW6Services main              
+         ================================= -->
+    <target name="createBW6Services" depends="_loadConfig,_createBW6Services,_createHawkServices,_copy_expl_scripts,_create_soft_bw6_deployer_link,_export_domain_config"/>
+	
+	 <!-- ================================= 
+          target: dropBW6Services main              
+         ================================= -->
+    <target name="dropBW6Services" depends="_loadConfig,_dropBW6Services,_dropHawkServices"/>
+	
+<!-- ================================= 
+          target: _loadConfigInit              
+         ================================= -->
+    <target name="_loadConfigInit" depends="_loadEnvironement"> 
+	<pathconvert property="SOFT_ROOT_converted">
+		<path location="${SOFT_ROOT}" />
+	</pathconvert>
+	<pathconvert property="TIBCO_ROOT_converted">
+		<path location="${TIBCO_ROOT}" />
+	</pathconvert>
+    </target>	
+	
+   <!-- ================================= 
+          target: loadConfig              
+         ================================= -->
+    <target name="_loadConfig" depends="_loadConfigInit,define_filters">
+
+	
+	<condition property="bw6_installed">
+		<and>
+			<isset property="TIBCO_BW_DIR"/>
+			<available file="${TIBCO_BW_DIR}" type="dir"/>
+		</and>
+	</condition>
+	
+	<condition property="services_enabled">
+		<or>
+			<and>
+				<isset property="isWindows"/>
+				<istrue value="${BW6WINServices_enable}"/>	
+			</and>
+			<isset property="isUnix"/>
+		</or>					
+	</condition>
+	
+	<condition property="deploy_windows_services">
+		<and>
+			<isset property="services_enabled"/>
+			<isset property="isWindows"/>			
+		</and>
+	</condition>
+	
+	<condition property="bw6_services_enabled">
+		<and>
+			<isset property="bw6_installed"/>
+			<isset property="services_enabled"/>				
+		</and>
+	</condition>
+		
+	<condition property="deploy_bw6_windows_service">
+		<and>
+			<isset property="bw6_services_enabled"/>
+			<isset property="deploy_windows_services"/>			
+		</and>
+	</condition>
+	
+	
+	<condition property="deploy_bw6_unix_script">
+		<and>
+			<isset property="bw6_installed"/>
+			<isset property="isUnix"/>
+			<isset property="bw6.expl.os.template.dir"/>			
+		</and>
+	</condition>
+
+	<condition property="tea_installed">
+		<and>
+			<isset property="TIBCO_TEA_DIR"/>
+			<available file="${TIBCO_TEA_DIR}" type="dir"/>
+		</and>
+	</condition>
+	<condition property="deploy_tea_unix_script">
+		<and>
+			<isset property="tea_installed"/>
+			<isset property="isUnix"/>
+			<isset property="bw6.expl.os.template.dir"/>			
+		</and>
+	</condition>
+	
+	<condition property="ems_installed">
+		<and>
+			<isset property="TIBCO_EMS_DIR"/>
+			<available file="${TIBCO_EMS_DIR}" type="dir"/>
+		</and>
+	</condition>	
+
+	<condition property="tea_ems_agent_installed">
+		<and>
+			<isset property="TIBCO_TEA_EMS_AGENT_DIR"/>
+			<available file="${TIBCO_TEA_EMS_AGENT_DIR}" type="dir"/>
+		</and>
+	</condition>
+	<condition property="deploy_tea_ems_agent_unix_script">
+		<and>	
+			<isset property="ems_installed"/>
+			<isset property="tea_ems_agent_installed"/>
+			<isset property="isUnix"/>
+			<isset property="bw6.expl.os.template.dir"/>			
+		</and>
+	</condition>
+	<condition property="deploy_tea_ems_agent_windows_service">
+		<and>	
+			<isset property="ems_installed"/>
+			<available file="${TEAEMSAgent_bin_dir}" type="dir"/>
+			<isset property="deploy_windows_services"/>		
+		</and>
+	</condition>
+
+	<condition property="hawk_installed">
+		<and>
+			<isset property="TIBCO_HAWK_CONFIG_DIR"/>
+			<available file="${TIBCO_HAWK_CONFIG_DIR}" type="dir"/>			
+		</and>
+	</condition>
+	<!--
+	<condition property="deploy_hawk_unix_script">
+		<and>
+			<isset property="hawk_installed"/>
+			<isset property="isUnix"/>
+			<isset property="bw6.expl.os.template.dir"/>			
+		</and>
+	</condition>
+	
+	<condition property="deploy_hawk_windows_service">
+		<and>			
+			<available file="${HAWKMonitorAgent_bin_dir}" type="dir"/>
+			<isset property="deploy_windows_services"/>					
+		</and>
+	</condition>
+	-->
+	<condition property="hawk_admin_agent_installed">
+		<and>
+			<isset property="TIBCO_HAWK_TEA_AGENT_DIR"/>
+			<available file="${TIBCO_HAWK_TEA_AGENT_DIR}" type="dir"/>
+			<available file="${HAWKAdminAgent_cfg}" type="file"/>
+			<available file="${HAWKAdminAgent_prop}" type="file"/>
+			<isset property="tea_installed"/>
+		</and>
+	</condition>
+	<!--
+	<condition property="deploy_hawk_admin_agent_unix_script">
+		<and>	
+			<isset property="hawk_admin_agent_installed"/>			
+			<isset property="isUnix"/>
+			<isset property="bw6.expl.os.template.dir"/>			
+		</and>
+	</condition>
+	<condition property="deploy_hawk_admin_agent_windows_service">
+		<and>	
+			<isset property="hawk_admin_agent_installed"/>		
+			<available file="${HawkAdminAgent_bin_dir}" type="dir"/>			
+			<isset property="deploy_windows_services"/>					
+		</and>
+	</condition>
+	-->
+	<condition property="soft_bw6_deployer_installed">
+		<and>
+			<isset property="SOFT_BW6_DEPLOYER_DIR"/>
+			<available file="${SOFT_BW6_DEPLOYER_DIR}" type="dir"/>
+		</and>
+	</condition>
+	<condition property="perform_soft_bw6_deployer_installation">
+		<and>
+			<isset property="soft_bw6_deployer_installed"/>
+			<isset property="isUnix"/>
+		</and>
+	</condition>
+
+	
+    </target> 
+
+
+	<!-- ================================= 
+          target: _createBW6Services              
+         ================================= -->
+    <target name="_createBW6Services" depends="_configureBW6Agent,_configureBW6JDBCDataSources,_createBW6UnixServices,_configureTEA,_createTEAUnixServices,_configureEMSTEAAgent,_createEMSTEAAgentUnixServices,_createBW6WindowsServices,_createEMSTEAAgentWindowsServices"/>
+	
+	<!-- ================================= 
+          target: _dropBW6Services              
+         ================================= -->
+    <target name="_dropBW6Services" depends="_dropBW6WindowsServices,_dropEMSTEAAgentWindowsServices"/>
+	
+	<!-- ================================= 
+          target: _configureBW6Agent             
+         ================================= -->
+    <target name="_configureBW6Agent" if="bw6_services_enabled">	
+		
+		<tempfile property="tmp.bw6.agent.config" destDir="${java.io.tmpdir}" prefix="bwagent" suffix=".json"/>										
+		
+		<!-- update json -->
+		<if>
+			<equals arg1="${BW6Agent_config_type}" arg2="dbems"/>
+			<then>
+				<echo message="BWAgent will use DBEMS transport" level="info"/>
+				<copy file="${BW6Agent_config_dbems}" tofile="${tmp.bw6.agent.config}" overwrite="true">
+				 <filterchain>
+						<tokenfilter>
+							<replaceregex pattern="^(bwagentnetworkname:).*" replace="\1 &quot;${TRA_domain}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(httpport:).*" replace="\1 ${BW6Agent_http_port}," flags="i" byline="true"/>
+							<replaceregex pattern="^(teaagentport:).*" replace="\1 ${BW6Agent_tea_agent_port}," flags="i" byline="true"/>														
+							<replaceregex pattern="^(teaserverurl:).*" replace="\1 &quot;${TEA_server_url}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbtype:).*" replace="\1 &quot;${TIBCO_datasource_type}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbdriver:).*" replace="\1 &quot;${TIBCO_datasource_driver}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbconnectionurl:).*" replace="\1 &quot;${TIBCO_datasource_url}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbuser:).*" replace="\1 &quot;${TIBCO_datasource_username}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbpassword:).*" replace="\1 &quot;${TIBCO_datasource_password}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(emsserverurl:).*" replace="\1 &quot;${EMS_DOM_factoryUrl}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(emsusername:).*" replace="\1 &quot;${EMS_DOM_admin_user}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(emsuserpassword:).*" replace="\1 &quot;${EMS_DOM_admin_passwd}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(statsprovider:).*" replace="\1 ${BW6Agent_stats_enable}," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbprovidertype:).*" replace="\1 &quot;${TIBCO_datasource_type}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbproviderdriver:).*" replace="\1 &quot;${TIBCO_datasource_driver}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbproviderconnectionurl:).*" replace="\1 &quot;${TIBCO_datasource_url}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbprovideruser:).*" replace="\1 &quot;${TIBCO_datasource_username}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(dbproviderpassword:).*" replace="\1 &quot;${TIBCO_datasource_password}&quot;," flags="i" byline="true"/>
+						</tokenfilter>
+					</filterchain>
+				</copy>	
+			</then>
+			<else>
+				<echo message="BWAgent will use AS transport" level="info"/>
+				<copy file="${BW6Agent_config_as}" tofile="${tmp.bw6.agent.config}" overwrite="true">
+					<filterchain>
+						<tokenfilter>					
+							<replaceregex pattern="^(bwagentnetworkname:).*" replace="\1 &quot;${TRA_domain}&quot;," flags="i" byline="true"/>
+							<replaceregex pattern="^(httpport:).*" replace="\1 ${BW6Agent_http_port}," flags="i" byline="true"/>
+							<replaceregex pattern="^(teaagentport:).*" replace="\1 ${BW6Agent_tea_agent_port}," flags="i" byline="true"/>														
+							<replaceregex pattern="^(teaserverurl:).*" replace="\1 &quot;${TEA_server_url}&quot;," flags="i" byline="true"/>							
+							<replaceregex pattern="^(statsprovider:).*" replace="\1 false," flags="i" byline="true"/>							
+						</tokenfilter>
+					</filterchain>
+				</copy>	
+			</else>
+		</if>
+		
+		<pathconvert property="tmp.bw6.agent.config.converted" targetos="unix">
+			<path location="${tmp.bw6.agent.config}" />
+		</pathconvert>
+	
+		<echo message="Configuring BWAgent" level="info"/>
+		<exec dir="${BW6Admin_bin_dir}" executable="${BW6Admin_bin_dir}/${BW6Admin_exe}" spawn="false" failonerror="true">
+			 <arg line="config -cf '${tmp.bw6.agent.config.converted}' agent"/>
+		</exec> 			
+    </target>
+
+	<!-- ================================= 
+          target: _configureBW6JDBCDataSources             
+         ================================= -->
+    <target name="_configureBW6JDBCDataSources" if="bw6_installed">	
+		
+		<!-- Oracle -->
+		<fileset id="oracle.ds.lib.contents" dir="${BW6OracleDataSourceLibDir}" includes="*.jar"/>
+		<fileset id="oracle.system.lib.contents" dir="${scripts.jdbc.driver.path}" includes="ojdbc*.jar"/>		
+		<property name="prop.oracle.ds.lib.contents" refid="oracle.ds.lib.contents"/>	
+		<property name="prop.oracle.system.lib.contents" refid="oracle.system.lib.contents"/>		
+		<if>
+			<and>
+				<!--
+				<length string="${prop.oracle.ds.lib.contents}" trim="true" when="eq" length="0" />
+				-->
+				<length string="${prop.oracle.system.lib.contents}" trim="true" when="greater" length="0" />
+			</and>
+			<then>
+				<copy todir="${BW6OracleDataSourceLibDir}"> 
+					<fileset dir="${scripts.jdbc.driver.path}">
+						<include name="ojdbc*.jar"/>
+					</fileset>
+				</copy>
+				<exec dir="${BW6Admin_bin_dir}" executable="${BW6Admin_bin_dir}/${BW6Install_exe}" spawn="false" failonerror="false">
+					 <arg line="oracle-driver"/>
+				</exec> 		
+			</then>
+		</if>
+				
+		<!-- MySQL -->
+		<fileset id="mysql.ds.lib.contents" dir="${BW6MySqlDataSourceLibDir}" includes="*.jar"/>
+		<fileset id="mysql.system.lib.contents" dir="${scripts.jdbc.driver.path}" includes="mysql-connector-java*.jar"/>	
+		<property name="prop.mysql.ds.lib.contents" refid="mysql.ds.lib.contents"/>
+		<property name="prop.mysql.system.lib.contents" refid="mysql.system.lib.contents"/>
+		<if>
+			<and>
+				<!--
+				<length string="${prop.mysql.ds.lib.contents}" trim="true" when="eq" length="0" />
+				-->
+				<length string="${prop.mysql.system.lib.contents}" trim="true" when="greater" length="0" />
+			</and>
+			<then>
+				<copy todir="${BW6MySqlDataSourceLibDir}"> 
+					<fileset dir="${scripts.jdbc.driver.path}">
+						<include name="mysql-connector-java*.jar"/>
+					</fileset>
+				</copy>
+				<exec dir="${BW6Admin_bin_dir}" executable="${BW6Admin_bin_dir}/${BW6Install_exe}" spawn="false" failonerror="false">
+					 <arg line="mysql-driver"/>
+				</exec> 		
+			</then>
+		</if>
+		
+		
+		<!-- MSSQL -->
+		<fileset id="mssql.ds.lib.contents" dir="${BW6JDBCDir}" includes="sqljdbc*.jar"/>
+		<property name="prop.mssql.ds.lib.contents" refid="mssql.ds.lib.contents"/>
+		<if>		
+			<length string="${prop.mssql.ds.lib.contents}" trim="true" when="eq" length="0" />			
+			<then>
+				<copy todir="${BW6JDBCDir}"> 
+					<fileset dir="${scripts.jdbc.driver.path}">
+						<include name="sqljdbc*.jar"/>
+					</fileset>
+				</copy>					
+			</then>
+		</if>
+		
+		<!-- JT400 -->
+		<fileset id="jt400.ds.lib.contents" dir="${BW6JDBCDir}" includes="jt400*.jar"/>
+		<property name="prop.jt400.ds.lib.contents" refid="jt400.ds.lib.contents"/>
+		<if>		
+			<length string="${prop.jt400.ds.lib.contents}" trim="true" when="eq" length="0" />			
+			<then>
+				<copy todir="${BW6JDBCDir}"> 
+					<fileset dir="${scripts.jdbc.driver.path}">
+						<include name="jt400*.jar"/>
+					</fileset>
+				</copy>					
+			</then>
+		</if>
+		
+		<!-- H2 -->
+		<fileset id="h2.ds.lib.contents" dir="${BW6JDBCDir}" includes="h2*.jar"/>
+		<property name="prop.h2.ds.lib.contents" refid="h2.ds.lib.contents"/>
+		<if>		
+			<length string="${prop.h2.ds.lib.contents}" trim="true" when="eq" length="0" />			
+			<then>
+				<copy todir="${BW6JDBCDir}"> 
+					<fileset dir="${scripts.jdbc.driver.path}">
+						<include name="h2*.jar"/>
+					</fileset>
+				</copy>					
+			</then>
+		</if>
+    </target>
+	
+	
+	
+	
+   <!-- ================================= 
+          target: _createBW6UnixServices            
+         ================================= -->
+    <target name="_createBW6UnixServices" if="deploy_bw6_unix_script">	
+	
+		<!-- make start/stop -->
+		<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+		<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${bw6.expl.os.template.dir}">
+				<include name="BWAgent*"/>
+			</fileset>
+			<filterset refid="filters.domains"/>
+			<filterset refid="filters.bw6"/>      	   
+			<filterset refid="filters.exploitation"/> 
+			<mergemapper to="${BW6Agent_unix_serviceName}"/>
+		</copy>
+		
+		<!-- perm -->	
+		<chmod file="${EXPL_SERVICES_DIR}/${BW6Agent_unix_serviceName}" perm="ug+rx"/>	
+		
+		<!-- fix 6.4 -->					
+		<basename file="${TIBCO_BW_DIR}" property="bw.version"/>	
+		<loadfile property="shCommonContent" srcFile="${BW6Scripts_shCommon}"/> 
+		<condition property="matches">
+			<contains string="${shCommonContent}" substring="bw/${bw.version}"/> 
+		</condition>				
+		<if>	
+			<not><isset property="matches"/></not>
+			<then>		
+				<tempfile property="tmp.bw6.shCommon" destDir="${java.io.tmpdir}" prefix="shCommon" suffix=".sh"/>												
+				<copy file="${BW6Scripts_shCommon}" tofile="${tmp.bw6.shCommon}" overwrite="true">
+					<filterchain>
+						<tokenfilter>					
+							<replaceregex pattern="(^\s*if.*)bw/6\.\d" replace="\1bw/${bw.version}" flags="i" byline="true"/>									
+							<replaceregex pattern="BW6_EDITION\}/6\.\d" replace="BW6_EDITION\}/${bw.version}" flags="i" byline="true"/>	
+						</tokenfilter>
+					</filterchain>
+				  </copy>	
+				  <copy file="${tmp.bw6.shCommon}" tofile="${BW6Scripts_shCommon}" overwrite="true"/>
+			</then>		
+		</if>
+    </target>
+
+	
+	 <!-- ================================= 
+          target: _createBW6WindowsServices            
+         ================================= -->
+    <target name="_createBW6WindowsServices" if="deploy_bw6_windows_service">	
+		<unregisterService name="${BW6Agent_windows_serviceName}"/>
+		<registerService name="${BW6Agent_windows_serviceName}" executable="${BW6Admin_bin_dir}/${BW6Agent_exe}"/>			
+    </target>
+
+	 <!-- ================================= 
+          target: _dropBW6WindowsServices            
+         ================================= -->
+    <target name="_dropBW6WindowsServices" if="deploy_bw6_windows_service">	
+		<unregisterService name="${BW6Agent_windows_serviceName}"/>				
+    </target>
+	
+    <!-- ================================= 
+          target: _createTEAUnixServices            
+         ================================= -->
+    <target name="_createTEAUnixServices" if="deploy_tea_unix_script">	
+	
+		<!-- make start/stop -->
+			<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+		<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${bw6.expl.os.template.dir}">
+				<include name="TEA*"/>
+			</fileset>
+			<filterset refid="filters.domains"/>
+			<filterset refid="filters.bw6"/>      	   
+			<filterset refid="filters.exploitation"/> 
+			<mergemapper to="${TEA_unix_serviceName}"/>
+		</copy>
+		
+		<!-- perm -->	
+		<chmod file="${EXPL_SERVICES_DIR}/${TEA_unix_serviceName}" perm="ug+rx"/>	
+    </target>
+
+	
+	<!-- ================================= 
+          target: _configureTEA             
+         ================================= -->
+    <target name="_configureTEA" if="tea_installed">	
+		
+		<tempfile property="tmp.tea.config" destDir="${java.io.tmpdir}" prefix="tea" suffix=".conf"/>										
+		<copy file="${TEA_cfg}" tofile="${tmp.tea.config}" overwrite="true">
+		 <filterchain>
+		   <tokenfilter>																		
+			<replaceregex pattern="^(tea.http.port).*" replace="\1=${TEA_server_port}" flags="i" byline="true"/>
+			<replaceregex pattern="^(tea.shell.port).*" replace="\1=${TEA_server_shell_port}" flags="i" byline="true"/>
+			<replaceregex pattern="^(tea.storage.remote.enabled).*" replace="\1=${TEA_server_remote_enabled}" flags="i" byline="true"/>
+		   </tokenfilter>
+		</filterchain>
+		</copy>
+		<copy file="${tmp.tea.config}" tofile="${TEA_cfg}" overwrite="true"/>
+		<echo message="${TEA_cfg} updated" level="info"/>
+		<delete file="${tmp.tea.config}" failonerror="false"/>
+				
+    </target>
+	
+	<!-- ================================= 
+          target: _configureEMSTEAAgent             
+         ================================= -->
+    <target name="_configureEMSTEAAgent" if="tea_ems_agent_installed">	
+		
+		<tempfile property="tmp.ems.tea.agent.config" destDir="${java.io.tmpdir}" prefix="emsteaagent" suffix=".conf"/>										
+		<copy file="${EMSTEAAgent_cfg}" tofile="${tmp.ems.tea.agent.config}" overwrite="true">
+		 <filterchain>
+		   <tokenfilter>																		
+			<replaceregex pattern="^(ems.agent.host.name).*" replace="\1=${TRA_domain_host}" flags="i" byline="true"/>
+			<replaceregex pattern="^(ems.teaserver.ur).*" replace="\1=${TEA_server_url}" flags="i" byline="true"/>
+		   </tokenfilter>
+		</filterchain>
+		</copy>
+		<copy file="${tmp.ems.tea.agent.config}" tofile="${EMSTEAAgent_cfg}" overwrite="true"/>
+		<echo message="${EMSTEAAgent_cfg} updated" level="info"/>
+		<delete file="${tmp.ems.tea.agent.config}" failonerror="false"/>
+				
+    </target>
+
+	
+    <!-- ================================= 
+          target: _createEMSTEAAgentUnixServices            
+         ================================= -->
+    <target name="_createEMSTEAAgentUnixServices" if="deploy_tea_ems_agent_unix_script">	
+	
+	<!-- make start/stop -->
+    	<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+	<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+  	 	<fileset dir="${bw6.expl.os.template.dir}">
+			<include name="EMSAdminAgent*"/>
+		</fileset>
+		<filterset refid="filters.domains"/>
+		<filterset refid="filters.bw6"/>      	   
+		<filterset refid="filters.exploitation"/> 
+		<mergemapper to="${TEAEMSAgent_unix_serviceName}"/>
+	</copy>
+	
+	<!-- perm -->	
+	<chmod file="${EXPL_SERVICES_DIR}/${TEAEMSAgent_unix_serviceName}" perm="ug+rx"/>	
+    </target>
+
+	 <!-- ================================= 
+          target: _createEMSTEAAgentWindowsServices            
+         ================================= -->
+    <target name="_createEMSTEAAgentWindowsServices" if="deploy_tea_ems_agent_windows_service">	
+		<unregisterService name="${TEAEMSAgent_windows_serviceName}"/>
+		<registerService name="${TEAEMSAgent_windows_serviceName}" executable="${TEAEMSAgent_bin_dir}/${TEAEMSAgent_exe}"/>			
+    </target>
+	
+	 <!-- ================================= 
+          target: _dropEMSTEAAgentWindowsServices            
+         ================================= -->
+    <target name="_dropEMSTEAAgentWindowsServices" if="deploy_tea_ems_agent_windows_service">	
+		<unregisterService name="${TEAEMSAgent_windows_serviceName}"/>		
+    </target>
+	
+	<!-- ================================= 
+          target: _createHawkServices              
+         ================================= -->
+    <target name="_createHawkServices" depends="_update_hawk_params,_createHawkAgentUnixServices,_createHawkEventUnixServices,_createHawkAdminAgentUnixServices,_createHawkAgentWindowsServices,_createHawkEventWindowsServices,_createHawkAdminAgentWindowsServices"/>
+	
+	<!-- ================================= 
+          target: _dropHawkServices              
+         ================================= -->
+    <target name="_dropHawkServices" depends="_dropHawkAgentWindowsServices,_dropHawkEventWindowsServices,_dropHawkAdminAgentWindowsServices"/>
+	
+
+	<!-- ================================= 
+          target: _createHawkAgentUnixServices            
+         ================================= -->
+    <target name="_createHawkAgentUnixServices" if="deploy_hawk_unix_script">	
+	
+	<!-- make start/stop -->
+    	<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+	<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+  	 	<fileset dir="${bw6.expl.os.template.dir}">
+			<include name="HawkAgent*"/>
+		</fileset>
+		<filterset refid="filters.domains"/>
+		<filterset refid="filters.bw6"/>      	   
+		<filterset refid="filters.exploitation"/> 
+		<mergemapper to="${HAWKMonitorAgent_unix_serviceName}"/>
+	</copy>
+	
+	<!-- perm -->	
+	<chmod file="${EXPL_SERVICES_DIR}/${HAWKMonitorAgent_unix_serviceName}" perm="ug+rx"/>	
+    </target>
+
+	
+	 <!-- ================================= 
+          target: _createHawkAgentWindowsServices            
+         ================================= -->
+    <target name="_createHawkAgentWindowsServices" if="deploy_hawk_windows_service">	
+		<unregisterService name="${HAWKMonitorAgent_windows_serviceName}"/>
+		<registerService name="${HAWKMonitorAgent_windows_serviceName}" executable="${HAWKMonitorAgent_bin_dir}/${HAWKMonitorAgent_exe}"/>			
+    </target>
+	
+	 <!-- ================================= 
+          target: _dropHawkAgentWindowsServices            
+         ================================= -->
+    <target name="_dropHawkAgentWindowsServices" if="deploy_hawk_windows_service">	
+		<unregisterService name="${HAWKMonitorAgent_windows_serviceName}"/>				
+    </target>
+	
+	<!-- ================================= 
+          target: _createHawkEventUnixServices            
+         ================================= -->
+    <target name="_createHawkEventUnixServices" if="deploy_hawk_unix_script">	
+	
+		<!-- make start/stop -->
+			<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+		<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${bw6.expl.os.template.dir}">
+				<include name="HawkEvent*"/>
+			</fileset>
+			<filterset refid="filters.domains"/>
+			<filterset refid="filters.bw6"/>      	   
+			<filterset refid="filters.exploitation"/> 
+			<mergemapper to="${HAWKEvent_unix_serviceName}"/>
+		</copy>
+		
+		<!-- perm -->	
+		<chmod file="${EXPL_SERVICES_DIR}/${HAWKEvent_unix_serviceName}" perm="ug+rx"/>	
+    </target>
+	
+	
+	<!-- ================================= 
+          target: _createHawkEventWindowsServices            
+         ================================= -->
+    <target name="_createHawkEventWindowsServices" if="deploy_hawk_windows_service">	
+		<unregisterService name="${HAWKEvent_windows_serviceName}"/>
+		<registerService name="${HAWKEvent_windows_serviceName}" executable="${HAWKEvent_bin_dir}/${HAWKEvent_exe}"/>			
+    </target>
+
+	<!-- ================================= 
+          target: _dropHawkEventWindowsServices            
+         ================================= -->
+	 <target name="_dropHawkEventWindowsServices" if="deploy_hawk_windows_service">	
+		<unregisterService name="${HAWKEvent_windows_serviceName}"/>				
+    </target>
+	
+	<!-- ================================= 
+          target: _createHawkAdminAgentUnixServices            
+         ================================= -->
+    <target name="_createHawkAdminAgentUnixServices" if="deploy_hawk_admin_agent_unix_script">	
+	
+		<!-- make start/stop -->
+			<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+		<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${bw6.expl.os.template.dir}">
+				<include name="HawkAdminAgent*"/>
+			</fileset>
+			<filterset refid="filters.domains"/>
+			<filterset refid="filters.bw6"/>      	   
+			<filterset refid="filters.exploitation"/> 
+			<mergemapper to="${HawkAdminAgent_unix_serviceName}"/>
+		</copy>
+		
+		<!-- perm -->	
+		<chmod file="${EXPL_SERVICES_DIR}/${HawkAdminAgent_unix_serviceName}" perm="ug+rx"/>	
+    </target>
+
+	 <!-- ================================= 
+          target: _createHawkAdminAgentWindowsServices            
+         ================================= -->
+    <target name="_createHawkAdminAgentWindowsServices" if="deploy_hawk_admin_agent_windows_service">	
+		<unregisterService name="${HawkAdminAgent_windows_serviceName}"/>
+		<registerService name="${HawkAdminAgent_windows_serviceName}" executable="${HawkAdminAgent_bin_dir}/${HawkAdminAgent_exe}"/>			
+    </target>
+	
+	 <!-- ================================= 
+          target: _dropHawkAdminAgentWindowsServices            
+         ================================= -->
+    <target name="_dropHawkAdminAgentWindowsServices" if="deploy_hawk_admin_agent_windows_service">	
+		<unregisterService name="${HawkAdminAgent_windows_serviceName}"/>					
+    </target>
+
+    <!-- ================================= 
+          target: _update_hawk_params              
+         ================================= -->
+   <target name="_update_hawk_params" depends="_loadConfig,_update_hawkagent_params,_update_hawkevent_params,_update_hawkhma_params,_update_display_params,_update_hawk_admin_agent_transport"/>
+	
+     <!-- ================================= 
+          target: _update_hawkagent_params              
+         ================================= -->
+    <target name="_update_hawkagent_params" if="hawk_installed">			
+		<tempfile property="tmp.hawk.agent.config" destDir="${java.io.tmpdir}" prefix="hawkagent" suffix=".cfg"/>										
+		<!-- update hawk -->
+		<copy file="${HAWKMonitorAgent_cfg}" tofile="${tmp.hawk.agent.config}" overwrite="true">
+			 <filterchain>
+			   <tokenfilter>																		
+				<replaceregex pattern="#(-hawk_domain).*" replace="\1 &quot;${TRA_domain}&quot;" flags="i" byline="true"/>
+				<replaceregex pattern="^(-hawk_domain).*" replace="\1 &quot;${TRA_domain}&quot;" flags="i" byline="true"/>
+				<replaceregex pattern="^(-rvd_session.*)" replace="#\1" flags="i" byline="true"/>
+				<replaceregex pattern="^(-ems_transport.*)" replace="#\1" flags="i" byline="true"/>
+				<replaceregex pattern="#(-as_session).*/$" replace="\1 ${HAWKMonitor_AS_transport_url}" flags="i" byline="true"/>
+				<replaceregex pattern="^(-as_session).*/$" replace="\1 ${HAWKMonitor_AS_transport_url}" flags="i" byline="true"/>
+				<replaceregex pattern="#(-auto_config_dir.*)" replace="\1" flags="i" byline="true"/>
+				<replaceregex pattern="^(-config_path.*)" replace="#\1" flags="i" byline="true"/>
+				<replaceregex pattern="^(-log_dir).*" replace="\1 &quot;${HAWK_LOG_DIR}&quot;" flags="i" byline="true"/>
+			   </tokenfilter>
+			</filterchain>
+		</copy>		
+
+		<copy file="${tmp.hawk.agent.config}" tofile="${HAWKMonitorAgent_cfg}" overwrite="true"/>
+		<echo message="${HAWKMonitorAgent_cfg} updated" level="info"/>
+		<delete file="${tmp.hawk.agent.config}" failonerror="false"/>
+		<delete file="${TIBCO_HAWK_CONFIG_DIR}/autoconfig/Self.hrb" failonerror="false"/>
+		<delete file="${TIBCO_HAWK_CONFIG_DIR}/autoconfig/Linux2x.hrb" failonerror="false"/>
+		<mkdir dir="${HAWK_LOG_DIR}"/>		
+     </target>
+
+	<!-- ================================= 
+          target: _update_hawkevent_params              
+         ================================= -->
+    <target name="_update_hawkevent_params" if="hawk_installed">			
+		<tempfile property="tmp.hawk.event.config" destDir="${java.io.tmpdir}" prefix="hawkevent" suffix=".cfg"/>										
+		<!-- update hawk -->
+		<copy file="${HAWKEvent_cfg}" tofile="${tmp.hawk.event.config}" overwrite="true">
+		 <filterchain>
+		   <tokenfilter>																		
+			<replaceregex pattern="#(-hawk_domain).*" replace="\1 &quot;${TRA_domain}&quot;" flags="i" byline="true"/>
+			<replaceregex pattern="^(-hawk_domain).*" replace="\1 &quot;${TRA_domain}&quot;" flags="i" byline="true"/>
+			<replaceregex pattern="^(-rvd_session.*)" replace="#\1" flags="i" byline="true"/>
+			<replaceregex pattern="^(-ems_transport.*)" replace="#\1" flags="i" byline="true"/>
+			<replaceregex pattern="#(-as_session).*/$" replace="\1 ${HAWKMonitor_AS_transport_url}" flags="i" byline="true"/>
+			<replaceregex pattern="^(-as_session).*/$" replace="\1 ${HAWKMonitor_AS_transport_url}" flags="i" byline="true"/>
+			<replaceregex pattern="^(-logdir).*" replace="\1 &quot;${HAWK_LOG_DIR}&quot;" flags="i" byline="true"/>
+			<replaceregex pattern="^(-datadir).*" replace="\1 &quot;${HAWK_EVENT_DATA_DIR}&quot;" flags="i" byline="true"/>
+		   </tokenfilter>
+		</filterchain>
+		</copy>		
+
+		<copy file="${tmp.hawk.event.config}" tofile="${HAWKEvent_cfg}" overwrite="true"/>
+		<echo message="${HAWKEvent_cfg} updated" level="info"/>
+		<delete file="${tmp.hawk.event.config}" failonerror="false"/>
+		<mkdir dir="${HAWK_LOG_DIR}"/>	
+		<mkdir dir="${HAWK_EVENT_DATA_DIR}"/>			
+     </target>
+
+	<!-- ================================= 
+          target: _update_hawkhma_params              
+         ================================= -->
+    <target name="_update_hawkhma_params" if="hawk_installed">			
+		<tempfile property="tmp.hawk.hawkhma.config" destDir="${java.io.tmpdir}" prefix="hawkhma" suffix=".cfg"/>										
+		<!-- update hawk -->
+		<copy file="${HAWKHMA_cfg}" tofile="${tmp.hawk.hawkhma.config}" overwrite="true">
+		 <filterchain>
+		   <tokenfilter>																		
+			<replaceregex pattern="#(-hawk_domain).*" replace="\1 &quot;${TRA_domain}&quot;" flags="i" byline="true"/>
+			<replaceregex pattern="^(-hawk_domain).*" replace="\1 &quot;${TRA_domain}&quot;" flags="i" byline="true"/>
+			<replaceregex pattern="^(-rvd_session.*)" replace="#\1" flags="i" byline="true"/>
+			<replaceregex pattern="^(-ems_transport.*)" replace="#\1" flags="i" byline="true"/>
+			<replaceregex pattern="#(-as_session).*/ $" replace="\1 ${HAWKMonitor_AS_transport_url}" flags="i" byline="true"/>
+			<replaceregex pattern="#(-as_session).*/$" replace="\1 ${HAWKMonitor_AS_transport_url}" flags="i" byline="true"/>
+			<replaceregex pattern="^(-as_session).*/$" replace="\1 ${HAWKMonitor_AS_transport_url}" flags="i" byline="true"/>
+			<replaceregex pattern="^(-logdir).*" replace="\1 &quot;${HAWK_LOG_DIR}&quot;" flags="i" byline="true"/>
+		   </tokenfilter>
+		</filterchain>
+		</copy>
+
+		<copy file="${tmp.hawk.hawkhma.config}" tofile="${HAWKHMA_cfg}" overwrite="true"/>
+		<echo message="${HAWKHMA_cfg} updated" level="info"/>
+		<delete file="${tmp.hawk.hawkhma.config}" failonerror="false"/>
+		<mkdir dir="${HAWK_LOG_DIR}"/>					
+     </target>
+
+	<!-- ================================= 
+          target: _update_display_params              
+         ================================= -->
+    <target name="_update_display_params" if="hawk_installed">			
+		<tempfile property="tmp.hawk.display.config" destDir="${java.io.tmpdir}" prefix="hawkdisplay" suffix=".cfg"/>										
+		<!-- update hawk -->	
+		<copy file="${HAWKDisplay_cfg}" tofile="${tmp.hawk.display.config}" overwrite="true">
+		 <filterchain>
+		   <tokenfilter>																		
+			<replaceregex pattern="#(-hawk_domain).*" replace="\1 &quot;${TRA_domain}&quot;" flags="i" byline="true"/>
+			<replaceregex pattern="^(-hawk_domain).*" replace="\1 &quot;${TRA_domain}&quot;" flags="i" byline="true"/>
+			<replaceregex pattern="^(-rvd_session.*)" replace="#\1" flags="i" byline="true"/>
+			<replaceregex pattern="^(-ems_transport.*)" replace="#\1" flags="i" byline="true"/>
+			<replaceregex pattern="#(-as_session).*/$" replace="\1 ${HAWKMonitor_AS_transport_url}" flags="i" byline="true"/>
+			<replaceregex pattern="^(-as_session).*/$" replace="\1 ${HAWKMonitor_AS_transport_url}" flags="i" byline="true"/>
+			<replaceregex pattern="^(-logdir).*" replace="\1 &quot;${HAWK_LOG_DIR}&quot;" flags="i" byline="true"/>
+		   </tokenfilter>
+		</filterchain>
+		</copy>		
+
+		<copy file="${tmp.hawk.display.config}" tofile="${HAWKDisplay_cfg}" overwrite="true"/>
+		<echo message="${HAWKDisplay_cfg} updated" level="info"/>
+		<delete file="${tmp.hawk.display.config}" failonerror="false"/>
+		<mkdir dir="${HAWK_LOG_DIR}"/>			
+     </target>
+
+
+    <!-- ================================= 
+          target: _update_hawk_admin_agent_transport              
+         ================================= -->
+    <target name="_update_hawk_admin_agent_transport" if="hawk_admin_agent_installed">			
+										
+		<!-- update hawk -->	
+		<copy file="${templates.dir}/bw6/${HAWKAdminAgent_cfg_fileName}" tofile="${HAWKAdminAgent_cfg}" overwrite="true">   	 	
+			<filterset refid="filters.domains"/>
+			<filterset refid="filters.bw6"/>      	   				
+		</copy>
+		
+		<!-- update prop -->
+		<tempfile property="tmp.hawk.admin.agent.prop" destDir="${java.io.tmpdir}" prefix="hawkadminagent" suffix=".prop"/>	
+		<copy file="${HAWKAdminAgent_prop}" tofile="${tmp.hawk.admin.agent.prop}" overwrite="true">
+		 <filterchain>
+		   <tokenfilter>																		
+			<replaceregex pattern="^(auto.config.tea.server.url).*" replace="\1=${TEA_server_url}" flags="i" byline="true"/>
+			<replaceregex pattern="^(hawk.tea.agent.hostname).*" replace="\1=${TRA_domain_host}" flags="i" byline="true"/>
+		   </tokenfilter>
+		</filterchain>
+		</copy>
+		<copy file="${tmp.hawk.admin.agent.prop}" tofile="${HAWKAdminAgent_prop}" overwrite="true"/>
+		<echo message="${HAWKAdminAgent_prop} updated" level="info"/>
+		<delete file="${tmp.hawk.admin.agent.prop}" failonerror="false"/>
+		
+		<!-- update TRA -->
+		<tempfile property="tmp.hawk.admin.agent.tra" destDir="${java.io.tmpdir}" prefix="hawkadminagent" suffix=".tra"/>	
+		<if>
+			<isset property="AS_HOME"/>
+			<then>											
+				<!-- update tra -->	
+				<copy file="${HAWKAdminAgent_tra}" tofile="${tmp.hawk.admin.agent.tra}" overwrite="true">
+					 <filterchain>
+					   <tokenfilter>																		
+						<replaceregex pattern="^(tibco.env.AS_HOME).*" replace="\1=${AS_HOME}" flags="i" byline="true"/>			
+					   </tokenfilter>
+					</filterchain>
+				</copy>	
+				<copy file="${tmp.hawk.admin.agent.tra}" tofile="${HAWKAdminAgent_tra}" overwrite="true"/>
+				<echo message="${HAWKAdminAgent_tra} updated" level="info"/>
+			</then>
+		</if>	
+		
+		<if>
+			<isset property="TIBCO_RV_DIR"/>
+			<then>											
+				<!-- update tra -->	
+				<copy file="${HAWKAdminAgent_tra}" tofile="${tmp.hawk.admin.agent.tra}" overwrite="true">
+					 <filterchain>
+					   <tokenfilter>																		
+						<replaceregex pattern="^(tibco.env.RV_HOME=).*" replace="\1=${TIBCO_RV_DIR}" flags="i" byline="true"/>			
+					   </tokenfilter>
+					</filterchain>
+				</copy>	
+				<copy file="${tmp.hawk.admin.agent.tra}" tofile="${HAWKAdminAgent_tra}" overwrite="true"/>
+				<echo message="${HAWKAdminAgent_tra} updated" level="info"/>
+			</then>
+		</if>		
+   </target>
+	
+     <!-- ================================= 
+          target: _remove_expl_scripts
+        ================================= -->
+   <target name="_remove_expl_scripts" depends="_loadConfig,_remove_expl_scripts_unix,_remove_expl_scripts_windows"/>	
+
+  <!-- ================================= 
+          target: _remove_expl_scripts_unix
+        ================================= -->
+   <target name="_remove_expl_scripts_unix" if="isUnix">	
+
+		<For param="script">
+			<fileset dir="${scripts.exploitation.dir}/unix">
+				<include name="*.sh" />
+				<include name="*.ksh" />				
+			</fileset>		
+			<sequential>
+				<var name="script.name" unset="true"/>
+				<var name="script.name.replaced" unset="true"/>
+				<basename file="@{script}" property="script.name"/>										
+				<if>
+					<contains string="${script.name}" substring="@domain@"/>
+					<then>				
+						<propertyregex property="script.name.replaced"
+									   input="${script.name}"
+									   regexp="(.*)@domain@(.*)"
+									   select="\1${conf}\2"/>						
+						<delete file="${EXPL_SCRIPT_DIR}/${script.name.replaced}" failonerror="false"/>																
+					</then>
+					<else>
+						<delete file="${EXPL_SCRIPT_DIR}/${script.name}" failonerror="false"/>
+					</else>
+				</if>				
+			</sequential>
+		</For>
+		
+		<!-- specific BW6 -->
+		<For param="script">
+			<fileset dir="${scripts.exploitation.dir}/unix/bw6">
+				<include name="*.sh" />
+				<include name="*.ksh" />				
+			</fileset>		
+			<sequential>
+				<var name="script.name" unset="true"/>
+				<var name="script.name.replaced" unset="true"/>
+				<basename file="@{script}" property="script.name"/>										
+				<if>
+					<contains string="${script.name}" substring="@domain@"/>
+					<then>				
+						<propertyregex property="script.name.replaced"
+									   input="${script.name}"
+									   regexp="(.*)@domain@(.*)"
+									   select="\1${conf}\2"/>						
+						<delete file="${EXPL_SCRIPT_DIR}/${script.name.replaced}" failonerror="false"/>																
+					</then>
+					<else>
+						<delete file="${EXPL_SCRIPT_DIR}/${script.name}" failonerror="false"/>
+					</else>
+				</if>				
+			</sequential>
+		</For>
+		
+		<delete dir="${EXPL_SCRIPT_DIR}/functions" includeemptydirs="true" failonerror="false"/>
+		<delete dir="${CFT_SCRIPT_DIR}" includeemptydirs="true" failonerror="false"/>
+		<delete dir="${MVS_SCRIPT_DIR}" includeemptydirs="true" failonerror="false"/>
+   </target>
+   
+    <!-- ================================= 
+          target: _remove_expl_scripts_windows
+        ================================= -->
+   <target name="_remove_expl_scripts_windows" if="isWindows">			
+	<delete dir="${CFT_SCRIPT_DIR}" includeemptydirs="true" failonerror="false"/>
+	<delete dir="${MVS_SCRIPT_DIR}" includeemptydirs="true" failonerror="false"/>
+   </target>
+
+	
+
+	<!-- ================================= 
+          target: _copy_expl_scripts              
+         ================================= -->
+    <target name="_copy_expl_scripts" depends="_loadConfig,_remove_expl_scripts,_copy_expl_scripts_windows,_copy_expl_scripts_unix"/>
+
+
+   
+ 	<!-- ================================= 
+          target: _copy_expl_scripts_windows
+        ================================= -->
+   <target name="_copy_expl_scripts_windows" if="isWindows">
+					
+		<if>
+			<available file="${scripts.exploitation.dir}/windows/cft" type="dir"/>
+			<then>
+				<!-- copy CFT shared -->
+				<mkdir dir="${CFT_SCRIPT_DIR}"/>
+				<mkdir dir="${CFT_LOG_DIR}"/>	
+				<copy  todir="${CFT_SCRIPT_DIR}" overwrite="true">
+					<fileset dir="${scripts.exploitation.dir}/windows/cft"/>
+					<filterset refid="filters.exploitation"/> 
+				</copy>	
+			</then>
+		</if>
+				
+		<if>
+			<available file="${scripts.exploitation.dir}/mvs" type="dir"/>
+			<then>
+				<!-- copy MVS shared -->
+				<mkdir dir="${MVS_SCRIPT_DIR}"/>	
+				<copy  todir="${MVS_SCRIPT_DIR}" overwrite="true">
+					<fileset dir="${scripts.exploitation.dir}/mvs"/>		
+				</copy>	
+			</then>
+		</if>
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/windows/pgp" type="dir"/>
+			<then>
+				<!-- copy pgp shared -->
+				<mkdir dir="${PGP_SCRIPT_DIR}"/>	
+				<copy  todir="${PGP_SCRIPT_DIR}" overwrite="false">
+					<fileset dir="${scripts.exploitation.dir}/windows/pgp"/>		
+				</copy>										
+			</then>
+		</if>
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/certificates" type="dir"/>
+			<then>
+				<!-- copy SSL shared -->
+				<mkdir dir="${SSL_CERTIFICATES_DIR}"/>	
+				<copy  todir="${SSL_CERTIFICATES_DIR}" overwrite="false">
+					<fileset dir="${scripts.exploitation.dir}/certificates"/>		
+				</copy>										
+			</then>
+		</if>
+		
+   </target>
+   
+    <!-- ================================= 
+          target: _copy_expl_scripts_unix
+        ================================= -->
+   <target name="_copy_expl_scripts_unix" if="isUnix">
+	
+		<For param="script">
+			<fileset dir="${scripts.exploitation.dir}/unix">
+				<include name="*.sh" />
+				<include name="*.ksh" />				
+			</fileset>		
+			<sequential>
+				<var name="script.name" unset="true"/>
+				<basename file="@{script}" property="script.name"/>				
+				<if>
+					<contains string="${script.name}" substring="@domain@"/>
+					<then>						
+						<copy todir="${EXPL_SCRIPT_DIR}" overwrite="true">
+							<fileset dir="${scripts.exploitation.dir}/unix" includes="${script.name}"/>							
+							<filterset refid="filters.exploitation"/> 
+							<regexpmapper from="(.*)@domain@(.*)" to="\1${conf}\2"/>
+						</copy>						
+					</then>
+					<else>
+						<copy file="@{script}" todir="${EXPL_SCRIPT_DIR}" overwrite="true">
+							<filterset refid="filters.exploitation"/> 
+						</copy>
+						<chmod perm="ug+x" file="${EXPL_SCRIPT_DIR}/${script.name}"/>
+					</else>
+				</if>
+			</sequential>
+		</For>
+		
+		<!-- specific BW6 -->
+		<For param="script">
+			<fileset dir="${scripts.exploitation.dir}/unix/bw6">
+				<include name="*.sh" />
+				<include name="*.ksh" />				
+			</fileset>		
+			<sequential>
+				<var name="script.name" unset="true"/>
+				<basename file="@{script}" property="script.name"/>				
+				<if>
+					<contains string="${script.name}" substring="@domain@"/>
+					<then>						
+						<copy todir="${EXPL_SCRIPT_DIR}" overwrite="true">
+							<fileset dir="${scripts.exploitation.dir}/unix" includes="${script.name}"/>							
+							<filterset refid="filters.exploitation"/> 
+							<regexpmapper from="(.*)@domain@(.*)" to="\1${conf}\2"/>
+						</copy>						
+					</then>
+					<else>
+						<copy file="@{script}" todir="${EXPL_SCRIPT_DIR}" overwrite="true">
+							<filterset refid="filters.exploitation"/> 
+						</copy>
+						<chmod perm="ug+x" file="${EXPL_SCRIPT_DIR}/${script.name}"/>
+					</else>
+				</if>
+			</sequential>
+		</For>
+	
+		<!-- perm -->
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SCRIPT_DIR}" includes="*${conf}*"/>
+		</chmod>
+
+		<!-- copy shared -->
+		<mkdir dir="${EXPL_SCRIPT_DIR}/functions"/>
+		<copy  todir="${EXPL_SCRIPT_DIR}/functions" overwrite="true">
+			<fileset dir="${scripts.exploitation.dir}/unix/functions"/>
+		</copy>				
+		
+		<!-- copy shared java libs -->
+		<mkdir dir="${EXPL_SCRIPT_DIR}/functions/lib"/>
+		<copy  todir="${EXPL_SCRIPT_DIR}/functions/lib" overwrite="true">
+			<fileset dir="lib">
+				<include name="*.jar"/>
+				<exclude name="ant*.jar"/>
+			</fileset>
+		</copy>
+		
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/unix/cft" type="dir"/>
+			<then>
+				<!-- copy CFT shared -->
+				<mkdir dir="${CFT_SCRIPT_DIR}"/>
+				<mkdir dir="${CFT_LOG_DIR}"/>	
+				<copy  todir="${CFT_SCRIPT_DIR}" overwrite="true">
+					<fileset dir="${scripts.exploitation.dir}/unix/cft"/>
+					<filterset refid="filters.exploitation"/> 
+				</copy>	
+				<chmod perm="ug+rx">
+					<fileset dir="${CFT_SCRIPT_DIR}"/>
+				</chmod>
+			</then>
+		</if>
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/mvs" type="dir"/>
+			<then>
+				<!-- copy MVS shared -->
+				<mkdir dir="${MVS_SCRIPT_DIR}"/>	
+				<copy  todir="${MVS_SCRIPT_DIR}" overwrite="true">
+					<fileset dir="${scripts.exploitation.dir}/mvs"/>		
+				</copy>	
+				<chmod perm="ug+rx">
+					<fileset dir="${MVS_SCRIPT_DIR}"/>
+				</chmod>					
+			</then>
+		</if>
+
+		<if>
+			<available file="${scripts.exploitation.dir}/unix/pgp" type="dir"/>
+			<then>
+				<!-- copy pgp shared -->
+				<mkdir dir="${PGP_SCRIPT_DIR}"/>	
+				<copy  todir="${PGP_SCRIPT_DIR}" overwrite="false">
+					<fileset dir="${scripts.exploitation.dir}/unix/pgp"/>		
+				</copy>
+				<chmod perm="ug+rx">
+					<fileset dir="${PGP_SCRIPT_DIR}"/>
+				</chmod>
+			</then>
+		</if>
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/certificates" type="dir"/>
+			<then>
+				<!-- copy SSL shared -->
+				<mkdir dir="${SSL_CERTIFICATES_DIR}"/>	
+				<copy  todir="${SSL_CERTIFICATES_DIR}" overwrite="false">
+					<fileset dir="${scripts.exploitation.dir}/certificates"/>		
+				</copy>										
+			</then>
+		</if>				
+   </target>
+ 		   
+
+    <!-- ================================= 
+          target: _create_soft_bw6_deployer_link
+        ================================= -->
+    <target name="_create_soft_bw6_deployer_link" if="perform_soft_bw6_deployer_installation" depends="_loadConfig">	
+		
+		<var name="softdeployer.basename" unset="true"/>
+		<basename file="${SOFT_BW6_DEPLOYER_DIR}" property="softdeployer.basename"/>
+						
+		<!-- SOFTDeployer link -->
+		<symlink action="single" link="${EXPL_SCRIPT_DIR}/${softdeployer.basename}" resource="${SOFT_BW6_DEPLOYER_DIR}" overwrite="true" failonerror="false" />						
+																	
+	</target>
+	
+	
+	<!-- ===================================================================== -->
+    <!-- Macro registerService			                                         	   -->
+    <!-- ===================================================================== -->
+    <macrodef name="registerService">
+	<attribute name="name" />	
+	<attribute name="executable" />
+        <sequential>   
+        	<var name="executable_converted" unset="true"/>
+			<var name="nssm_converted" unset="true"/>
+        	
+        	<pathconvert property="executable_converted" targetos="windows">
+				<path location="@{executable}" />
+			</pathconvert>
+			
+			<mkdir dir="${NSSM_SCRIPT_DIR}"/>	
+			<copy  todir="${NSSM_SCRIPT_DIR}" overwrite="false">
+				<fileset dir="${nssm.template.dir}"/>		
+			</copy>
+								
+			<pathconvert property="nssm_converted" targetos="windows">
+				<path location="${NSSM_SCRIPT_DIR}" />
+			</pathconvert>
+						
+			<echo message="register Service @{name} : ${executable_converted}, using ${NSSM_SCRIPT_DIR}/${nssm.exe}" level="info"/>
+			<exec dir="${nssm_converted}" executable="${nssm_converted}/${nssm.exe}" failonerror="false">
+				  <arg line="install @{name} '${executable_converted}'"/>
+			</exec>  
+			<exec dir="${nssm_converted}" executable="${nssm_converted}/${nssm.exe}" failonerror="false">
+				  <arg line="set @{name} Start SERVICE_DEMAND_START"/>
+			</exec>   			
+        </sequential>
+    </macrodef>	 
+	
+	<!-- ===================================================================== -->
+    <!-- Macro unregisterService			                                         	   -->
+    <!-- ===================================================================== -->
+    <macrodef name="unregisterService">
+	<attribute name="name" />		
+        <sequential>           	
+			<var name="nssm_converted" unset="true"/>        	        	
+			<pathconvert property="nssm_converted" targetos="windows">
+				<path location="${nssm.template.dir}" />
+			</pathconvert>
+			<echo message="Stopping Service @{name}" level="info"/>
+			<exec dir="${nssm_converted}" executable="${nssm_converted}/${nssm.exe}" failonerror="false" outputproperty="null">
+				  <arg line="stop @{name}"/>
+			</exec> 
+			<echo message="Unregister Service @{name}" level="info"/>
+			<exec dir="${nssm_converted}" executable="${nssm_converted}/${nssm.exe}" failonerror="false" outputproperty="null">
+				  <arg line="remove @{name} confirm"/>
+			</exec>     		
+        </sequential>
+    </macrodef>	 
+   
+</project>

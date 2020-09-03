@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+	======================================================================
+	22 févr. 07 20:25:00 project : SOFTInstalller description : 
+	set tasks definitions 
+	fxbrun
+	======================================================================
+-->
+
+<project name="scripts_definition">
+
+	<!--  isWindows  -->
+	<condition property="isWindows">
+		<os family="Windows" />
+	</condition>
+
+	<!--  isUnix-->
+	<condition property="isUnix">
+		<os family="unix"/>
+	</condition>
+
+	<!--  isLinux-->
+	<condition property="isLinux">
+		<and>
+			<os family="unix"/>
+			<contains string="${os.name}" substring="linux" casesensitive="false"/>
+		</and>
+	</condition>
+	
+	<!--  isAIX  -->
+	<condition property="isAIX">	
+		<and>
+			<os family="unix"/>
+			<contains string="${os.name}" substring="aix" casesensitive="false"/>
+		</and>
+	</condition>
+	
+	<!-- OS specifics --> 
+	<if>
+		<isset property="isWindows"/>
+		<then>
+			<property name="EMS_executable_extension" value=".exe"/>
+			<property name="EMS_OSExtension" value=".cmd"/>			
+		</then>
+		<else>
+			<property name="EMS_executable_extension" value=""/>
+			<property name="EMS_OSExtension" value=".sh"/>	
+		</else>
+	</if>
+
+	<!-- ===================================================================== -->
+    	<!-- loadEnvironement : Load installation files                            -->
+    	<!-- ===================================================================== -->
+	<target name="_loadEnvironement" depends="_check_conf">
+	
+		<!-- Load --> 
+		<SoftInstallerConfig softInstallerBaseDir="${basedir}" 
+							domainKey="conf" 
+							exportInputDomainFileKey="conf.converted" 
+							exportDomainFileKey="domain.conf.user.file" 
+							exportDomainFileNameKey="domain.conf.file.basename" 
+							exportInstallFileKey="installation.file"/>
+				
+		<!-- Check root --> 	
+		<if>
+			<or>
+				<not><isset property="TIBCO_ROOT"/></not>
+				<not><available file="${TIBCO_ROOT}" type="dir"/></not>
+			</or>
+			<then>
+				<fail message="TIBCO_ROOT not defined or not found"/>		
+			</then>
+		</if>
+
+		<!-- save install basename --> 	
+		<basename file="${installation.file}" property="installation.file.basename"/>
+		<dirname file="${installation.file}" property="installation.file.dirname"/>
+		<pathconvert property="installation.file.converted">
+			<path location="${installation.file}" />
+		</pathconvert>
+			
+	
+		<!-- OS specific -->
+		<var name="expl.os.template.dir" unset="true"/>
+		<if>
+			<isset property="isAIX"/>
+			<then>
+				<var name="expl.os.template.dir" value="${templates.dir}/exploitation/aix"/>
+			</then>
+			<elseif>
+				<isset property="isLinux"/>
+				<then>
+					<var name="expl.os.template.dir" value="${templates.dir}/exploitation/linux"/>	
+				</then>
+			</elseif>
+		</if>
+
+		<!-- OS specific -->
+		<var name="bw6.expl.os.template.dir" unset="true"/>
+		<if>
+			<isset property="isAIX"/>
+			<then>
+				<var name="bw6.expl.os.template.dir" value="${templates.dir}/exploitation/aix/bw6"/>
+			</then>
+			<elseif>
+				<isset property="isLinux"/>
+				<then>
+					<var name="bw6.expl.os.template.dir" value="${templates.dir}/exploitation/linux/bw6"/>	
+				</then>
+			</elseif>
+		</if>
+
+		
+		<!-- calculate SOFTMonitor port -->
+		<math result="SOFTMonitor_http_port" operand1="${SOFTMonitor_http_port_base}" operation="+" operand2="${SOFTMonitor_port_offset}" datatype="int"/>
+		<property name="SOFTMonitor_http" value="http://${SOFTMonitor_host}:${SOFTMonitor_http_port}"/>
+		
+		
+		<!-- logical machine secure -->
+		<if>
+			<and>
+				<equals arg1="${TRA_domain_host}" arg2="${TRA_domain_host_vip}" casesensitive="false" trim="true" />
+				<equals arg1="${TRA_domain_host_islogical}" arg2="true" casesensitive="false" trim="true" />				
+			</and>
+			<then>
+				<var name="TRA_domain_host_islogical" value="false"/>
+				<var name="TRA_domain_host_vip" value="${TRA_domain_host}"/>
+			</then>			
+		</if>
+		
+		<condition property="domain.clustered">
+			<equals arg1="${TRA_domain_host_islogical}" arg2="true" casesensitive="false" trim="true" />
+		</condition>
+	    	
+					
+		<if>
+			<isset property="domain.clustered"/>
+			<then>
+				<!-- log clustered -->	
+				<echo message="Domain is Clustered : ${domain.clustered}" level="info"/>				
+				<mkdir dir="${EXPL_CONF_DIR}"/>
+			</then>			
+		</if>
+		
+		<property name="domain.conf.file" value="${domain.conf.user.file}"/>
+	</target>
+	
+	
+	 <!-- ================================= 
+          target: _export_domain_config              
+         ================================= -->
+    <target name="_export_domain_config" depends="_loadEnvironement">    	 
+		
+		<pathconvert property="domain.conf.file.converted">
+			<path location="${domain.conf.file}" />
+		</pathconvert>
+
+		<if>
+			<available file="${domain.conf.file}"/>
+			<then>
+				<chmod perm="u+w" file="${domain.conf.file}"/>
+			</then>
+		</if>
+				
+    	<!-- export -->
+    	<SoftInstallerConfig softInstallerBaseDir="${basedir}" 
+    						  domainKey="conf" 
+    						  export="true"
+							  doNotEncrypt="${export_property_doNotEncrypt}"/>					
+    	
+		<chmod perm="ug+rx" file="${domain.conf.file}"/>
+		<chmod perm="ugo-w" file="${domain.conf.file}"/>				
+									
+    </target>
+
+	<!-- ===================================================================== -->
+    <!-- checkparams 	                                           	     -->
+    <!-- ===================================================================== -->    		
+		<target name="_check_conf" unless="conf">
+			<property name="echo_message" value="ERREUR: vous devez definir le fichier de configuration du domain dans le paramètre 'conf' (Ex: -Dconf=xxx)"/>			
+			<fail message="${echo_message}"/>		
+		</target>		
+</project>	

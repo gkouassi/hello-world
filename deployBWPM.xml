@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!-- ====================================================================== 
+     22 févr. 07 10:48:43                                                        
+
+     project  : BWPMInstaller
+     description : deploiement BW Process Monitor
+                   
+     fxbrun                                                                
+     ====================================================================== -->
+<project name="BWPMInstaller" default="deploy" basedir="..">    	
+		
+    <!-- include task definition -->
+    <import file="${basedir}/common/taskdef-scripts.xml"/>
+
+     <!-- include install definition -->
+     <import file="${basedir}/common/scripts_definition.xml"/>
+
+     <!-- include filter definition -->
+     <import file="${basedir}/common/filters.xml"/>
+
+    <!-- ================================= 
+         target: deploy              
+       ================================= -->
+      <target name="deploy" depends="_deploy_standalone,_deploy_to_mda,create-services,_start_server"/>
+	
+  
+    <!-- ================================= 
+          target: create-services
+      ================================= -->
+    <target name="create-services" depends="_export_domain_config,_create_services-windows,_create_services-unix"/>
+	    
+	
+	<!-- ================================= 
+          target: _initBWPMConfig              
+         ================================= -->
+    <target name="_initBWPMConfig" depends="_loadEnvironement"> 
+	
+		<!--  check soft binaries installed  -->
+		<available file="${SOFT_MONITOR_DIR}" type="dir" property="soft_monitor_binaries_installed"/>
+				
+		<!--  check MDA binaries installed  -->
+		<available file="${SOFT_MDA_DIR}/mda.properties" type="file" property="soft_mda_binaries_installed"/>
+				
+		<!--  check webapp installed  -->
+		<available file="${tibco_bwpm_install_dir}" type="dir" property="bwpm_webapp_installed"/>
+		
+		<!--  check server installed  -->
+		<available file="${BWPM_executable_bin_dir}" type="dir" property="bwpm_server_installed"/>
+				
+		<!-- calculate BWPMMonitor port -->
+		<math result="BWPM_http_port" operand1="${BWPM_http_port_base}" operation="+" operand2="${BWPM_port_offset}" datatype="int"/>
+		<math result="BWPM_http_stop_port" operand1="${BWPM_http_stop_port_base}" operation="+" operand2="${BWPM_port_offset}" datatype="int"/>
+		<math result="BWPM_http_redirect_port" operand1="${BWPM_http_redirect_port_base}" operation="+" operand2="${BWPM_port_offset}" datatype="int"/>
+		<math result="BWPM_http_ajp_port" operand1="${BWPM_http_ajp_port_base}" operation="+" operand2="${BWPM_port_offset}" datatype="int"/>
+		
+		<!-- Resolve address -->
+		<property name="BWPM_http" value="http://${BWPM_host}:${BWPM_http_port}"/>
+		<property name="BWPM_http_adress" value="${BWPM_http}/${BWPM_webapp_context}"/>		
+	</target>
+	
+	<!-- ================================= 
+          target: _loadBWPMConfig              
+         ================================= -->
+	<target name="_loadBWPMConfig" depends="_initBWPMConfig,define_filters"/> 
+	 
+	 
+	 <!-- ================================= 
+          target: _stop_server              
+         ================================= -->
+	<target name="_stop_server" if="bwpm_server_installed" depends="_loadBWPMConfig"> 
+		<if>
+			<isset property="isWindows" />
+			<then>
+				<!-- stop --> 
+				<stop-windows-svc servicename="${BWPM_windows_serviceName}"/>
+			</then>
+			<else>
+				<!-- stop --> 
+				<launch-unix-script dirname="${EXPL_SERVICES_DIR}" script="${BWPM_unix_serviceName}" arg="stop"/>
+			</else>
+		</if>	
+		
+		<!-- wait stop --> 
+		<wait-stop address="${BWPM_http_adress}"/>
+	</target>
+	
+	
+	 <!-- ================================= 
+          target: _start_server              
+         ================================= -->
+	<target name="_start_server" depends="_loadBWPMConfig" unless="soft_mda_binaries_installed"> 
+		<if>
+			<isset property="isWindows" />
+			<then>
+				<!-- start --> 
+				<start-windows-svc servicename="${BWPM_windows_serviceName}"/>
+			</then>
+			<else>
+				<!-- start --> 
+				<launch-unix-script dirname="${EXPL_SERVICES_DIR}" script="${BWPM_unix_serviceName}" arg="start"/>
+			</else>
+		</if>	
+		
+		<!-- wait start --> 
+		<wait-start address="${BWPM_http_adress}"/>
+	</target>
+	 
+	 
+    <!-- ================================= 
+          target: _deploy_standalone
+         ================================= -->
+    <target name="_deploy_standalone" depends="_stop_server" if="soft_monitor_binaries_installed" unless="soft_mda_binaries_installed">		            	  
+								
+		<!-- Load soft installation --> 
+		<property file="${SOFT_MONITOR_DIR}/deploy/shared/tomcat7.properties" />
+							
+		<echo message="Installing BWPM Server ${TOMCAT_VERSION} to ${BWPM_executable_dir}." level="info"/>
+		<delete dir="${BWPM_executable_dir}" failonerror="false" includeemptydirs="true"/>
+		<mkdir dir="${BWPM_root_dir}"/>		
+						
+		<!-- deploy tomcat --> 
+		<unzip src="${SOFT_MONITOR_DIR}/products/${TOMCAT_VERSION}.zip" dest="${BWPM_root_dir}"/>
+		<move file="${BWPM_root_dir}/${TOMCAT_VERSION}" tofile="${BWPM_executable_dir}"/>
+        
+		<!-- logging libs -->		
+		<copy overwrite="true" todir="${BWPM_executable_dir}">
+			<fileset dir="${SOFT_MONITOR_DIR}/lib/logging/tomcat7" includes="**/*.jar"/>
+		</copy>
+		
+		<!-- Wrapper -->		
+		<copy overwrite="true" todir="${BWPM_executable_bin_dir}">
+			<fileset dir="${SOFT_MONITOR_DIR}/tools/wrapper/bin" includes="*.exe"/>
+			<fileset dir="${SOFT_MONITOR_DIR}/tools/wrapper/lib" includes="*.jar"/>
+		</copy>
+		
+		<!-- ext libs -->		
+		<mkdir dir="${BWPM_lib_dir}"/>		
+		<copy overwrite="true" todir="${BWPM_lib_dir}">
+			<fileset dir="templates/bwpm/lib" includes="*.jar"/>
+		</copy>
+		
+		<!-- jdbc libs -->			
+		<copy overwrite="true" todir="${BWPM_lib_dir}">
+			<fileset dir="${tibco_tpcl_jdbc}" includes="ojdbc*.jar,sqljdbc*.jar"/>
+		</copy>
+		
+		<!-- scripts  -->		
+		<copy overwrite="true" todir="${BWPM_executable_bin_dir}">
+			<fileset dir="templates/bwpm/bin"/>				
+			<filterset refid="filters.bwpm"/>
+		</copy>
+		
+		<!-- conf  -->		
+		<copy overwrite="true" todir="${BWPM_conf_dir}">
+			<fileset dir="templates/bwpm/conf"/>				
+			<filterset refid="filters.bwpm"/>
+		</copy>		
+		
+		<!-- fix crlf and perms for unix -->
+		<if>
+			<isset property="isUnix" />
+			<then>
+				<!-- Change perms and eof -->	
+				<echo message="Changing unix permission" level="info" />
+				<fixcrlf srcdir="${BWPM_executable_bin_dir}" eol="unix" eof="remove" includes="*.sh,bwpmd*"/>
+				<chmod perm="ug+rx">
+					<fileset dir="${BWPM_executable_bin_dir}" includes="*.sh,bwpmd*"/>
+				</chmod>
+				
+				<!-- Remove unused files -->	
+				<echo message="Remove unused windows files" level="info" />
+				<delete>
+					<fileset dir="${BWPM_executable_bin_dir}">
+						<include name="*.bat"/>
+						<include name="*.exe"/>
+					</fileset>
+				</delete>
+			</then>
+			<elseif>
+				<isset property="isWindows" />
+				<then>
+					<!-- Remove unused files -->	
+					<echo message="Remove unused unix files" level="info" />					
+					<delete>
+						<fileset dir="${BWPM_executable_bin_dir}">
+							<include name="*.sh"/>
+							<include name="bwpmd*"/>
+						</fileset>
+					</delete>										
+				</then>
+			</elseif>
+		</if>
+		
+		<!-- remove unused apps -->		
+		<delete includeemptydirs="true">
+			<fileset dir="${BWPM_webapp_dir}">
+				<include name="docs/**"/>
+				<include name="examples/**"/>
+				<include name="host-manager/**"/>
+				<include name="manager/**"/>
+				<include name="ROOT/**"/>
+			</fileset>
+		</delete>											
+    </target>
+	
+	
+	 <!-- ================================= 
+          target: _deploy_to_mda
+         ================================= -->
+    <target name="_deploy_to_mda" depends="_stop_server" if="soft_mda_binaries_installed">		            	  
+								
+		<!-- Load MDA installation --> 
+		<property file="${SOFT_MDA_DIR}/mda.properties" />
+		<property name="MDA_app_dir" value="${SOFT_MDA_DIR}/app/apache-tomcat-${mda.tomcat.version}"/>		
+		<property name="MDA_app_conf_dir" value="${MDA_app_dir}/conf"/>
+		<property name="BWPM_webapp_lib_dir" value="${tibco_bwpm_install_dir}/WEB-INF/lib"/>		
+		
+		<!-- echo -->
+		<echo message="Installing BWPM Server to ${MDA_app_dir}." level="info"/>
+		
+		<!-- ext libs -->		
+		<mkdir dir="${BWPM_webapp_lib_dir}"/>		
+		<copy overwrite="true" todir="${BWPM_webapp_lib_dir}">
+			<fileset dir="templates/bwpm/lib" includes="*.jar"/>
+		</copy>
+		
+		<!-- jdbc libs -->			
+		<copy overwrite="true" todir="${BWPM_webapp_lib_dir}">
+			<fileset dir="${tibco_tpcl_jdbc}" includes="ojdbc*.jar,sqljdbc*.jar"/>
+		</copy>				
+		
+		<!-- conf  -->		
+		<mkdir dir="${MDA_app_conf_dir}/Catalina"/>	
+		<copy overwrite="true" todir="${MDA_app_conf_dir}/Catalina">
+			<fileset dir="templates/bwpm/conf/Catalina"/>				
+			<filterset refid="filters.bwpm"/>
+		</copy>						
+		
+		<!-- remove unused apps -->		
+		<delete includeemptydirs="true">
+			<fileset dir="${MDA_app_dir}/webapps">
+				<include name="docs/**"/>
+				<include name="examples/**"/>
+				<include name="host-manager/**"/>
+				<include name="manager/**"/>
+				<include name="ROOT/**"/>
+			</fileset>
+		</delete>											
+    </target>
+
+	 <!-- ================================= 
+         target: create_services-windows              
+     ================================= -->
+   <target name="_create_services-windows" depends="_loadBWPMConfig" if="isWindows" unless="soft_mda_binaries_installed">	   	
+		<if>
+			<available file="${BWPM_executable_bin_dir}/wrapper.exe" type="file" />
+			<then>
+				<!-- Remove service -->
+				<exec executable="${BWPM_executable_bin_dir}/wrapper.exe" dir="${BWPM_executable_bin_dir}" failonerror="false">					
+					<arg value="-r" />
+					<arg value="${BWPM_conf_dir}/wrapper.conf" />
+				</exec>	
+		
+				<!-- add service -->		
+				<echo message="Install tomcat windows service" level="info" />
+				<exec executable="${BWPM_executable_bin_dir}/wrapper.exe" dir="${BWPM_executable_bin_dir}" failonerror="true">					
+					<arg value="-i" />
+					<arg value="${BWPM_conf_dir}/wrapper.conf" />
+				</exec>	
+			</then>
+		</if>
+    </target>
+	
+    <!-- ================================= 
+         target: create_services-unix              
+     ================================= -->
+   <target name="_create_services-unix" depends="_loadBWPMConfig" if="isUnix" unless="soft_mda_binaries_installed">	
+   	
+		<!-- use script -->
+		<var name="daemon" value="bwpmd"/>
+		<if>
+			<isset property="isAIX" />			
+			<then><var name="daemon" value="bwpmd_AIX"/></then>
+		</if>
+		
+		<!-- make start/stop -->
+    	<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+    	<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${BWPM_executable_bin_dir}">
+				<include name="${daemon}"/>		
+			</fileset>
+			<mergemapper to="${BWPM_unix_serviceName}"/>
+    	</copy>
+    		
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SERVICES_DIR}" includes="${BWPM_unix_serviceName}"/>
+		</chmod>	
+    </target>
+
+  
+     <!-- ================================= 
+         target: _delete_services-unix
+     ================================= -->
+   <target name="_delete_services-unix" depends="_loadBWPMConfig" if="isUnix">	   		
+    	<delete file="${EXPL_SERVICES_DIR}/${BWPM_unix_serviceName}" failonerror="false"/>     	   	
+    </target>
+	
+	
+	<!-- - - - - - - - - - - - - - - - - - 
+		macro : wait to stop
+	 - - - - - - - - - - - - - - - - - -->
+	<macrodef name="wait-stop">		
+		<attribute name="address" />		
+		<sequential>	
+			<echo message="Wait until server stopped at @{address}" level="info"/>
+			<var name="server.stopped" unset="true"/>
+			<for list="${wait.for.list}" param="tries">
+				<sequential>
+					<if>
+						<not><isset property="server.stopped"/></not>
+						<then>
+							<if>
+								<http url="@{address}"/>					
+								<then>
+									<echo message="try @{tries}"/>						
+									<sleep seconds="${wait.for.waittime}"/>
+								</then>
+								<else>
+									<property name="server.stopped" value="true"/>
+									<echo message="Server stopped"/>	
+								</else>
+							</if>
+						</then>
+					</if>
+				</sequential>
+			</for>				
+			<if>
+				<not><isset property="server.stopped"/></not>
+				<then>
+					<fail message="Server did not stopped within timeout" />
+				</then>
+			</if>
+		</sequential>
+	</macrodef>
+	
+	<!-- - - - - - - - - - - - - - - - - - 
+		macro : wait to start                
+	- - - - - - - - - - - - - - - - - -->
+	<macrodef name="wait-start">		
+		<attribute name="address" />		
+		<sequential>
+			<echo message="Wait until server started at @{address}" level="info"/>
+			<var name="server.started" unset="true"/>			
+			<for list="${wait.for.list}" param="tries">
+				<sequential>
+					<if>
+						<not><isset property="server.started"/></not>
+						<then>					
+							<if>
+								<not><http url="@{address}"/></not>					
+								<then>
+									<echo message="try @{tries}"/>						
+									<sleep seconds="${wait.for.waittime}"/>
+								</then>
+								<else>						
+									<property name="server.started" value="true"/>	
+									<echo message="Server started"/>
+								</else>
+							</if>
+						</then>
+					</if>
+				</sequential>						
+			</for>
+									
+			<if>
+				<not><isset property="server.started"/></not>
+				<then>
+					<echo message="Server did not started within timeout" level="warning"/>
+				</then>
+			</if>
+		</sequential>
+	</macrodef>
+	
+	<!-- - - - - - - - - - - - - - - - - - 
+		macro : stop windows service
+    - - - - - - - - - - - - - - - - - -->
+	<macrodef name="stop-windows-svc">		
+		<attribute name="servicename" />		
+		<sequential>				
+			<echo message="Stopping service @{servicename}" level="info"/>
+			<exec executable="cmd" failonerror="false">
+				<arg value="/c" />
+				<arg value="net stop @{servicename}"/>
+			</exec>						
+		</sequential>
+	</macrodef>
+	
+	<!-- - - - - - - - - - - - - - - - - - 
+		macro : start windows service
+    - - - - - - - - - - - - - - - - - -->
+	<macrodef name="start-windows-svc">		
+		<attribute name="servicename" />		
+		<sequential>				
+			<echo message="Starting service @{servicename}" level="info"/>
+			<exec executable="cmd" failonerror="false">
+				<arg value="/c" />
+				<arg value="net start @{servicename}"/>
+			</exec>						
+		</sequential>
+	</macrodef>
+	
+	<!-- - - - - - - - - - - - - - - - - - 
+		macro : launch unix script
+    - - - - - - - - - - - - - - - - - -->
+	<macrodef name="launch-unix-script">
+		<attribute name="dirname" />
+		<attribute name="script" />
+		<attribute name="arg" />				
+		<sequential>
+			<if>
+				<available file="@{dirname}/@{script}" type="file" />
+				<then>
+					<echo message="Launching @{dirname}/@{script} @{arg}" level="info" />
+					<exec executable="@{dirname}/@{script}" failonerror="false" failifexecutionfails="false" logerror="true">
+						<arg value="@{arg}" />
+					</exec>
+					<echo message="@{script} executed successfully"/>
+				</then>
+			</if>
+		</sequential>
+	</macrodef>
+	
+</project>

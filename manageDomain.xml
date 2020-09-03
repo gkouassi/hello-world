@@ -1,0 +1,1529 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!-- ====================================================================== 
+     22 févr. 07 10:48:43                                                        
+
+     project  : SOFTInstalller
+     description : Administration du Domaine TIBCO
+                   
+     fxbrun                                                                
+     ====================================================================== -->
+<project name="SOFTInstalller" default="create_domain" basedir="..">
+    	
+	<!-- include task definition -->
+	<import file="${basedir}/common/taskdef-scripts.xml"/>
+
+	<!-- include install definition -->
+	<import file="${basedir}/common/scripts_definition.xml"/>
+
+	<!-- include filter definition -->
+	<import file="${basedir}/common/filters.xml"/>
+
+	<!-- ================================= 
+          target: create_domain              
+        ================================= -->
+       <target name="create_domain" depends="_create_domain,_update_hawk_and_admin_params,_export_domain_config,_start_services"/>
+	   
+	   <!-- ================================= 
+          target: create_secondaryserver              
+        ================================= -->
+       <target name="create_secondaryserver" depends="_create_secondaryserver,_update_hawk_and_admin_params,_export_domain_config,_create_services,_start_domain"/>
+	
+	<!-- ================================= 
+          target: migrate_domain_57
+        ================================= -->
+       <target name="migrate_domain_57" depends="_migrate_domain_57,_change_credentials,_export_domain_config,_stop_services,_start_services"/>
+	   
+	 <!-- ================================= 
+          target: migrate_domain_58
+       ================================= -->
+		<target name="migrate_domain_58" depends="_migrate_domain_58,_export_domain_config,_stop_services,_start_services"/>
+		
+		<!-- ================================= 
+          target: migrate_domain_59
+       ================================= -->
+		<target name="migrate_domain_59" depends="_migrate_domain_59,_export_domain_config,_stop_services,_start_services"/>
+	
+	<!-- ================================= 
+          target: change_credentials
+        ================================= -->
+       <target name="change_credentials" depends="_change_domain_credentials,_export_domain_config,_stop_services,_start_services"/>	
+	
+	<!-- ================================= 
+          target: delete_domain
+        ================================= -->
+       <target name="delete_domain" depends="_delete_services-unix,_delete_domain_config"/>
+	
+	<!-- ================================= 
+          target: addMachineToDomain
+        ================================= -->
+       <target name="addMachineToDomain" depends="_addMachineToDomain,_update_hawk_and_admin_params,_export_domain_config,_start_services"/>		
+
+	 <!-- ================================= 
+        target: joinLogicalMachine
+       ================================= -->
+     <target name="joinLogicalMachine" depends="_joinLogicalMachine,_create_symlink_cluster_unix,_export_domain_config"/>		
+
+	   
+	<!-- ================================= 
+         target: create_unix_services              
+       ================================= -->
+      <target name="create_unix_services" depends="_copy_expl_scripts,_create_symlink_logs_unix,_export_domain_config"/>
+	   
+	 <!-- ================================= 
+         target: create_windows_scripts              
+        ================================= -->
+      <target name="create_windows_scripts" depends="_copy_expl_scripts,_export_domain_config"/>
+	
+	<!-- ================================= 
+          target: export_domain_config              
+        ================================= -->
+       <target name="export_domain_config" depends="_create_symlink_cluster_unix,_export_domain_config"/>
+	
+	<!-- ================================= 
+          target: deploy_mft_agent_cli              
+       ================================= -->
+     <target name="deploy_mft_agent_cli" depends="_deploy_mft_agent_cli_windows,_deploy_mft_agent_cli_unix,_export_domain_config"/>
+	
+	<!-- ================================= 
+          target: deploy_mft_hubagent
+      ================================= -->
+     <target name="deploy_mft_hubagent" depends="_deploy_mft_hubagent,deploy_mft_agent_cli,_create_mftagent_services,_export_domain_config"/>
+	
+	<!-- ================================= 
+          target: remove_mft_hubagent
+      ================================= -->
+     <target name="remove_mft_hubagent" depends="_remove_mftagent_services,_remove_mftagent_cli"/>
+	 
+	 <!-- ================================= 
+          target: create_mft_services
+      ================================= -->
+     <target name="create_mft_services" depends="_create_mftagent_services,_export_domain_config"/>
+	
+	<!-- ================================= 
+          target: install_softdeployer
+      ================================= -->
+     <target name="install_softdeployer" depends="_install_softdeployer"/>
+	
+	<!-- ================================= 
+	     target: create_softdeployer_profile
+	 ================================= -->
+	<target name="create_softdeployer_profile" depends="_create_softdeployer_profile,_copy_expl_scripts,_export_domain_config"/>
+	
+    <!-- ================================= 
+          target: _loadConfigInit              
+         ================================= -->
+    <target name="_loadConfigInit" depends="_loadEnvironement"> 
+	
+		<!-- convert before filters -->
+		<pathconvert property="tibco_mftagent_dir_converted">
+			<path location="${tibco_mftagent_dir}" />
+		</pathconvert>
+		<pathconvert property="tibco_mftagent_deployment_dir_converted">
+			<path location="${tibco_mftagent_deployment_dir}" />
+		</pathconvert>	
+		
+		<pathconvert property="SOFT_ROOT_converted">
+			<path location="${SOFT_ROOT}" />
+		</pathconvert>
+		<pathconvert property="TIBCO_ROOT_converted">
+			<path location="${TIBCO_ROOT}" />
+		</pathconvert>
+		
+		<available file="${tibco_mftserver_dir}" type="dir" property="mft_server_installed"/>
+		<available file="${tibco_mftagent_dir}" type="dir" property="mft_agent_installed"/>		
+		<available file="${TRA_executable}" property="hawk_agent_configured"/>
+		<available file="${ADMIN_executable}" property="administrator_configured"/>
+		
+		<!-- check softdeployer -->
+    	<condition property="softdeployer.installed">
+    		<and>    			
+    			<isset property="SOFT_DEPLOYER_DIR"/>
+    			<available file="${SOFT_DEPLOYER_DIR}" type="dir"/>    				
+    		</and>
+    	</condition>
+		<condition property="do_install_softdeployer">
+			<and>
+				<isset property="softdeployer.installed"/>			
+				<available file="${SOFT_DEPLOYER_DIR}" type="dir"/>
+				<os family="unix"/>	
+			</and>
+		</condition>	
+		<condition property="do_install_softdeployer_config">
+			<and>
+				<isset property="do_install_softdeployer"/>
+				<equals arg1="${SOFT_ROOT_converted}" arg2="${TIBCO_ROOT_converted}" casesensitive="true" trim="false" />
+			</and>
+		</condition>		
+		
+		<!-- no more used -->	
+		<!-- No more used, not compatible with new SOFTConfig API -->	
+		<var name="domain.clustered.unix" unset="true"/>
+		
+		<!-- find links unix command -->
+		<if>
+			<isset property="isAIX"/>
+			<then>
+				<var name="cmdfindlinks" value="find ./ ! -name . -prune -type l"/>
+			</then>
+			<else>
+				<var name="cmdfindlinks" value="find ./ -maxdepth 1 -type l"/>
+			</else>
+		</if>
+		
+    </target>	
+	
+	<!-- ================================= 
+          target: loadConfig              
+         ================================= -->
+    <target name="_loadConfig" depends="_loadConfigInit,define_filters"/> 
+	
+    <!-- ================================= 
+          target: _create_domain              
+         ================================= -->
+    <target name="_create_domain" depends="_loadConfig">		
+    	    	
+    	<stopDomain failonerror="false"/>
+    	
+    	<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/tra"/>
+    		<filterset refid="filters.domains"/>					
+    	</copy>
+    	
+    	
+    	<!-- invoke tibco cmdline tool --> 
+		<if>
+			<equals arg1="${TRA_domain_host_islogical}" arg2="true" casesensitive="false" trim="true" />
+			<then>
+				<!-- create clustered domain -->
+				<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+					<env key="TIBCO_ADMIN_HOME" path="${tibco_administrator_dir}"/>
+					<env key="TIBCO_TRA_HOME" path="${tibco_tra_dir}"/>
+					<arg line="-cmdFile '${tmpDir}'/CreateDomainEMSCluster.xml -verbose"/>
+				</exec>
+								
+				<!-- correct a bug on TRA which cause other domainutility commands to fail -->
+				<loadfile srcfile="${TRA_default_domain_home_file}" property="domain.home.conf.props">
+					<filterchain>
+						<linecontains negate="true">
+							<contains value="${TRA_domain}.TIBCO_TRA_DOMAIN_HOME"/>					
+						</linecontains>						
+						<replacestring from="\=" to="="/>
+						<replacestring from="\:" to=":"/>				
+					</filterchain>
+				</loadfile>
+				
+				<sortlist property="domain.home.conf.props.sorted" value="${domain.home.conf.props}" delimiter="${line.separator}"/>
+				<echo file="${TRA_default_domain_home_file}" message="${domain.home.conf.props.sorted}${line.separator}${TRA_domain}.TIBCO_TRA_DOMAIN_HOME=${TRA_domain_tra_dir}"/>
+							
+			</then>
+			<else>
+				<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+					<arg line="-cmdFile '${tmpDir}'/CreateDomainEMS.xml -verbose"/>
+				</exec>    		   
+			</else>
+		</if>
+		 
+    		    	    
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>	
+
+		<!-- reset vars -->
+		<var name="hawk_agent_configured" unset="true"/>
+		<var name="administrator_configured" unset="true"/>		
+		<available file="${TRA_executable}" property="hawk_agent_configured"/>
+		<available file="${ADMIN_executable}" property="administrator_configured"/>
+		
+    
+    </target>
+	
+	 <!-- ================================= 
+          target: _create_secondaryserver             
+         ================================= -->
+    <target name="_create_secondaryserver" depends="_loadConfig">		    	    	    	
+    	
+    	<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/tra"/>
+    		<filterset refid="filters.domains"/>					
+    	</copy>
+    	
+    	
+    	<!-- invoke tibco cmdline tool --> 
+		<if>
+			<equals arg1="${TRA_domain_host_islogical}" arg2="true" casesensitive="false" trim="true" />
+			<then>
+				<!-- create clustered domain -->
+				<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+					<env key="TIBCO_ADMIN_HOME" path="${tibco_administrator_dir}"/>
+					<env key="TIBCO_TRA_HOME" path="${tibco_tra_dir}"/>
+					<arg line="-cmdFile '${tmpDir}'/AddSecondaryServerEMSCluster.xml -verbose"/>
+				</exec>
+								
+				<!-- correct a bug on TRA which cause other domainutility commands to fail -->
+				<loadfile srcfile="${TRA_default_domain_home_file}" property="domain.home.conf.props">
+					<filterchain>
+						<linecontains negate="true">
+							<contains value="${TRA_domain}.TIBCO_TRA_DOMAIN_HOME"/>					
+						</linecontains>						
+						<replacestring from="\=" to="="/>
+						<replacestring from="\:" to=":"/>				
+					</filterchain>
+				</loadfile>
+				
+				<sortlist property="domain.home.conf.props.sorted" value="${domain.home.conf.props}" delimiter="${line.separator}"/>
+				<echo file="${TRA_default_domain_home_file}" message="${domain.home.conf.props.sorted}${line.separator}${TRA_domain}.TIBCO_TRA_DOMAIN_HOME=${TRA_domain_tra_dir}"/>
+							
+			</then>
+			<else>
+				<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+					<arg line="-cmdFile '${tmpDir}'/AddSecondaryServerEMS.xml -verbose"/>
+				</exec>    		   
+			</else>
+		</if>
+		 
+    		    	    
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>	
+
+		<!-- reset vars -->
+		<var name="hawk_agent_configured" unset="true"/>
+		<var name="administrator_configured" unset="true"/>		
+		<available file="${TRA_executable}" property="hawk_agent_configured"/>
+		<available file="${ADMIN_executable}" property="administrator_configured"/>		
+    
+    </target>
+	
+	 <!-- ================================= 
+          target: _joinLogicalMachine              
+         ================================= -->
+    <target name="_joinLogicalMachine" depends="_loadConfig" if="domain.clustered">		
+    	    
+		<!-- stop domain -->
+		<stopDomain failonerror="false"/>
+		
+    	<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/tra"/>
+    		<filterset refid="filters.domains"/>					
+    	</copy>
+    	
+		<!-- correct a bug on TRA -->
+		<loadfile srcfile="${TRA_default_domain_home_file}" property="domain.home.conf.props">
+			<filterchain>
+				<linecontains negate="true">
+					<contains value="${TRA_domain}.TIBCO_TRA_DOMAIN_HOME"/>	
+					<contains value="${TRA_domain}.TIBCO_ADMIN_DOMAIN_HOME"/>	
+					<contains value="${TRA_domain}.${TRA_domain_host}.TIBCO_TRA_DOMAIN_HOME"/>
+				</linecontains>						
+				<replacestring from="\=" to="="/>
+				<replacestring from="\:" to=":"/>				
+			</filterchain>
+		</loadfile>
+		
+		<sortlist property="domain.home.conf.props.sorted" value="${domain.home.conf.props}" delimiter="${line.separator}"/>
+		<if>
+			<isset property="domain.home.conf.props"/>
+			<then>
+				<echo file="${TRA_default_domain_home_file}" message="${domain.home.conf.props.sorted}${line.separator}"/>
+			</then>
+			<else>
+				<delete file="${TRA_default_domain_home_file}"/>
+			</else>
+		</if>
+		
+		<echo file="${TRA_default_domain_home_file}" message="${TRA_domain}.TIBCO_TRA_DOMAIN_HOME=${TRA_domain_tra_dir}${line.separator}" append="true"/>
+		<echo file="${TRA_default_domain_home_file}" message="${TRA_domain}.TIBCO_ADMIN_DOMAIN_HOME=${TRA_domain_admin_dir}${line.separator}" append="true"/>
+		<echo file="${TRA_default_domain_home_file}" message="${TRA_domain}.${TRA_domain_host}.TIBCO_TRA_DOMAIN_HOME=${TRA_domain_tra_dir}${line.separator}" append="true"/>
+				
+    	<!-- join logical machine (bugged on windows) -->
+		<if>
+			<isset property="isWindows"/>
+			<then>
+				<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+					<env key="TIBCO_ADMIN_HOME" path="${tibco_administrator_dir}"/>
+					<env key="TIBCO_TRA_HOME" path="${tibco_tra_dir}"/>
+					<arg line="-cmdFile '${tmpDir}'/JoinLogicalMachine.xml -verbose"/>
+				</exec>
+			</then>
+		</if>					
+				    	    		    	    
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>	
+
+		<!-- reset vars -->
+		<var name="hawk_agent_configured" unset="true"/>
+		<var name="administrator_configured" unset="true"/>		
+		<available file="${TRA_executable}" property="hawk_agent_configured"/>
+		<available file="${ADMIN_executable}" property="administrator_configured"/>		
+				
+		<!-- register/start ems services --> 					
+		<ant antfile="${basedir}/ant/manageEMSServers.xml" 
+			 target="register_ems_servers" 
+			 inheritall="false">
+		</ant>		
+		
+		<!-- register/start soft --> 
+		<ant antfile="${basedir}/ant/deploySOFTMonitor.xml" 
+			 target="_register_soft_services" 
+			 inheritall="false">	
+		</ant>		
+		
+		<!-- start domain --> 		
+		<startDomain/>
+		
+    </target>
+
+	 <!-- ================================= 
+          target: _update_hawk_and_admin_params              
+         ================================= -->
+    <target name="_update_hawk_and_admin_params" depends="_update_hawk_params,_update_admin_params"/>
+	
+	
+	  <!-- ================================= 
+          target: _update_hawk_params              
+         ================================= -->
+    <target name="_update_hawk_params" depends="_loadConfig" if="hawk_agent_configured">			
+			<tempfile property="tmp.hawk.config" destDir="${java.io.tmpdir}" prefix="hawkagent" suffix=".cfg"/>							
+			<if>
+				<length string="${TRA_domain_hawk_network}" trim="true" length="0" />
+				<then>
+					<var name="TRA_domain_hawk_network" value=";"/>					
+				</then>
+			</if>
+			
+			<!-- update hawk -->
+			<copy file="${TRA_executable_cfg}" tofile="${tmp.hawk.config}" overwrite="true">
+				<filterchain>
+					<tokenfilter>						
+						<replaceregex pattern="(-ami_rvd_session)\s.*" replace="\1 ${TRA_domain_hawk_service} ${TRA_domain_hawk_network} ${TRA_domain_hawk_deamon}" flags="gi" />						
+						<replaceregex pattern="#(-M LogfileMicroAgent)" replace="\1" flags="i" byline="true"/>
+						<replaceregex pattern="#(\s*-scan_rate)" replace="\1" flags="i" byline="true"/>
+						<replaceregex pattern="#(\s*-block_size)" replace="\1" flags="i" byline="true"/>
+						<replaceregex pattern="#(\s*-eval_rate)" replace="\1" flags="i" byline="true"/>	
+						<replaceregex pattern="(-log_dir\s).*" replace="\1 &quot;${TIBCO_LOGS}&quot;" flags="gi" byline="true"/>	
+						<replaceregex pattern="(-tsm_traceLogFile\s).*" replace="\1 &quot;${TIBCO_LOGS}/tsm.log&quot;" flags="gi" byline="true"/>
+ 						
+					</tokenfilter>
+				</filterchain>
+			</copy>					
+			<copy file="${tmp.hawk.config}" tofile="${TRA_executable_cfg}" overwrite="true"/>
+			<echo message="${TRA_executable_cfg} updated" level="info"/>
+			<delete file="${tmp.hawk.config}" failonerror="false"/>
+			
+			<!-- update HMA TRA 5.9-->
+			<if>
+				<available file ="${TRA_hma_cfg}" />
+				<then>
+					<tempfile property="tmp.hawkhma.config" destDir="${java.io.tmpdir}" prefix="hawkhma" suffix=".cfg"/>
+					<copy file="${TRA_hma_cfg}" tofile="${tmp.hawkhma.config}" overwrite="true">
+						<filterchain>
+							<tokenfilter>						
+								<replaceregex pattern="(-rvd_session)\s.*" replace="\1 ${TRA_domain_hawk_service} ${TRA_domain_hawk_network} ${TRA_domain_hawk_deamon}" flags="gi" />														
+								<replaceregex pattern="(-logdir\s).*" replace="\1 &quot;${TIBCO_LOGS}&quot;" flags="gi" byline="true"/>						
+							</tokenfilter>
+						</filterchain>
+					</copy>
+					<copy file="${tmp.hawkhma.config}" tofile="${TRA_hma_cfg}" overwrite="true"/>
+					<echo message="${TRA_hma_cfg} updated" level="info"/>
+					<delete file="${tmp.hawkhma.config}" failonerror="false"/>
+				</then>
+			</if>
+	</target>
+	
+	
+	  <!-- ================================= 
+          target: _update_admin_params              
+         ================================= -->
+    <target name="_update_admin_params" depends="_loadConfig" if="administrator_configured">					
+			<tempfile property="tmp.admin.config" destDir="${java.io.tmpdir}" prefix="administrator" suffix=".tra"/>				
+			<copy file="${ADMIN_executable_tra}" tofile="${tmp.admin.config}" overwrite="true">
+				<filterchain>
+					<tokenfilter>
+						<replaceregex pattern="(java.property.TIBCO_APP_LOG_FILE\s).*" replace="\1${ADMIN_executable_log}" flags="i" byline="true"/>
+						<replaceregex pattern="#(tibcoadmin.monitor.hawkConsole.enabled.*)" replace="\1" flags="i" byline="true"/>
+						<replaceregex pattern="(repo.logOperations\s).*" replace="\1true" flags="i" byline="true"/>
+						<replaceregex pattern="#(repo.logDirectory\s=).*" replace="\1&quot;${TIBCO_LOGS}&quot;" flags="i" byline="true"/>
+						<replaceregex pattern="(repo.auditFileName\s).*" replace="\1${ADMIN_repo_auditFileName}" flags="i" byline="true"/>
+						<replaceregex pattern="#(repo.logFileNamePrefix=).*" replace="\1${ADMIN_repo_logFileNamePrefix}" flags="i" byline="true"/>
+						<replaceregex pattern="#(repo.logFileMaxNumber=).*" replace="\1${ADMIN_repo_logFileMaxNumber}" flags="i" byline="true"/>
+						<replaceregex pattern="#(repo.logFileMaxSize=).*" replace="\1${ADMIN_repo_logFileMaxSize}" flags="i" byline="true"/>
+						<replaceregex pattern="#(repo.logLevel\s).*" replace="\1${ADMIN_repo_logLevel}" flags="i" byline="true"/>												
+					</tokenfilter>
+				</filterchain>
+			</copy>					
+			<copy file="${tmp.admin.config}" tofile="${ADMIN_executable_tra}" overwrite="true"/>
+			<echo message="${ADMIN_executable_tra} updated" level="info"/>
+			<delete file="${tmp.admin.config}" failonerror="false"/>
+			
+			<!-- TODO Modif TOMCAT Conf for http port -->
+	</target>
+	
+    <!-- ================================= 
+          target: create_services              
+        ================================= -->
+   <target name="_create_services" depends="_loadConfig" if="expl.os.template.dir">	
+   	
+		<!-- make start/stop -->
+    	<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+		<if>		
+			<available file="${ADMIN_executable}"/>
+			<then>
+					<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+					<fileset dir="${expl.os.template.dir}">
+							<include name="Admin*"/>
+					</fileset>
+					<filterset refid="filters.domains"/>      	   
+					<filterset refid="filters.exploitation"/>
+					<mergemapper to="${ADMIN_unix_service}"/> 
+				</copy>
+			</then>
+		</if>		
+	
+		<if>		
+			<available file="${TRA_executable}"/>
+			<then>
+				<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+					<fileset dir="${expl.os.template.dir}">
+						<include name="HawkAgent*"/>
+					</fileset>
+					<filterset refid="filters.domains"/>      	   
+					<filterset refid="filters.exploitation"/> 
+					<mergemapper to="${TRA_unix_service}"/>
+				</copy>
+			</then>
+		</if>	
+				
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SERVICES_DIR}"  includes="${ADMIN_unix_service},${TRA_unix_service}"/>
+		</chmod>
+	
+    </target>
+
+     <!-- ================================= 
+          target: _remove_expl_scripts_unix
+        ================================= -->
+   <target name="_remove_expl_scripts_unix" if="isUnix" depends="_loadConfig">	
+
+		<For param="script">
+			<fileset dir="${scripts.exploitation.dir}/unix">
+				<include name="*.sh" />
+				<include name="*.ksh" />			
+			</fileset>		
+			<sequential>
+				<var name="script.name" unset="true"/>
+				<var name="script.name.replaced" unset="true"/>
+				<basename file="@{script}" property="script.name"/>										
+				<if>
+					<contains string="${script.name}" substring="@domain@"/>
+					<then>				
+						<propertyregex property="script.name.replaced"
+									   input="${script.name}"
+									   regexp="(.*)@domain@(.*)"
+									   select="\1${conf}\2"/>						
+						<delete file="${EXPL_SCRIPT_DIR}/${script.name.replaced}" failonerror="false"/>																
+					</then>
+					<else>
+						<delete file="${EXPL_SCRIPT_DIR}/${script.name}" failonerror="false"/>
+					</else>
+				</if>
+				
+			</sequential>
+		</For>
+		<delete dir="${EXPL_SCRIPT_DIR}/functions" includeemptydirs="true" failonerror="false"/>
+		<delete dir="${CFT_SCRIPT_DIR}" includeemptydirs="true" failonerror="false"/>
+		<delete dir="${MVS_SCRIPT_DIR}" includeemptydirs="true" failonerror="false"/>
+   </target>
+   
+    <!-- ================================= 
+          target: _remove_expl_scripts_windows
+        ================================= -->
+   <target name="_remove_expl_scripts_windows" if="isWindows" depends="_loadConfig">			
+		<delete dir="${CFT_SCRIPT_DIR}" includeemptydirs="true" failonerror="false"/>
+		<delete dir="${MVS_SCRIPT_DIR}" includeemptydirs="true" failonerror="false"/>
+   </target>
+
+   
+    <!-- ================================= 
+          target: _remove_expl_scripts
+        ================================= -->
+   <target name="_remove_expl_scripts" depends="_loadConfig,_remove_expl_scripts_unix,_remove_expl_scripts_windows"/>			   
+
+
+    <!-- ================================= 
+          target: _copy_expl_scripts_windows
+        ================================= -->
+   <target name="_copy_expl_scripts_windows" depends="_create_services,_remove_expl_scripts,_install_softdeployer" if="isWindows">
+					
+		<if>
+			<available file="${scripts.exploitation.dir}/windows/cft" type="dir"/>
+			<then>
+				<!-- copy CFT shared -->
+				<mkdir dir="${CFT_SCRIPT_DIR}"/>
+				<mkdir dir="${CFT_LOG_DIR}"/>	
+				<copy  todir="${CFT_SCRIPT_DIR}" overwrite="true">
+					<fileset dir="${scripts.exploitation.dir}/windows/cft"/>
+					<filterset refid="filters.exploitation"/> 
+				</copy>	
+			</then>
+		</if>
+				
+		<if>
+			<available file="${scripts.exploitation.dir}/mvs" type="dir"/>
+			<then>
+				<!-- copy MVS shared -->
+				<mkdir dir="${MVS_SCRIPT_DIR}"/>	
+				<copy  todir="${MVS_SCRIPT_DIR}" overwrite="true">
+					<fileset dir="${scripts.exploitation.dir}/mvs"/>		
+				</copy>	
+			</then>
+		</if>
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/windows/pgp" type="dir"/>
+			<then>
+				<!-- copy pgp shared -->
+				<mkdir dir="${PGP_SCRIPT_DIR}"/>	
+				<copy  todir="${PGP_SCRIPT_DIR}" overwrite="false">
+					<fileset dir="${scripts.exploitation.dir}/windows/pgp"/>		
+				</copy>										
+			</then>
+		</if>
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/certificates" type="dir"/>
+			<then>
+				<!-- copy SSL shared -->
+				<mkdir dir="${SSL_CERTIFICATES_DIR}"/>	
+				<copy  todir="${SSL_CERTIFICATES_DIR}" overwrite="false">
+					<fileset dir="${scripts.exploitation.dir}/certificates"/>		
+				</copy>										
+			</then>
+		</if>
+		
+   </target>
+   
+    <!-- ================================= 
+          target: _copy_expl_scripts_unix
+        ================================= -->
+   <target name="_copy_expl_scripts_unix" depends="_create_services,_remove_expl_scripts,_install_softdeployer" if="isUnix">
+	
+		<For param="script">
+			<fileset dir="${scripts.exploitation.dir}/unix">
+				<include name="*.sh" />
+				<include name="*.ksh" />				
+			</fileset>		
+			<sequential>
+				<var name="script.name" unset="true"/>
+				<basename file="@{script}" property="script.name"/>				
+				<if>
+					<contains string="${script.name}" substring="@domain@"/>
+					<then>						
+						<copy todir="${EXPL_SCRIPT_DIR}" overwrite="true">
+							<fileset dir="${scripts.exploitation.dir}/unix" includes="${script.name}"/>							
+							<filterset refid="filters.exploitation"/> 
+							<regexpmapper from="(.*)@domain@(.*)" to="\1${conf}\2"/>
+						</copy>						
+					</then>
+					<else>
+						<copy file="@{script}" todir="${EXPL_SCRIPT_DIR}" overwrite="true">
+							<filterset refid="filters.exploitation"/> 
+						</copy>
+						<chmod perm="ug+x" file="${EXPL_SCRIPT_DIR}/${script.name}"/>
+					</else>
+				</if>
+			</sequential>
+		</For>	
+	
+		<!-- perm -->
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SCRIPT_DIR}" includes="*${conf}*"/>
+		</chmod>
+
+		<!-- copy shared -->
+		<mkdir dir="${EXPL_SCRIPT_DIR}/functions"/>
+		<copy  todir="${EXPL_SCRIPT_DIR}/functions" overwrite="true">
+			<fileset dir="${scripts.exploitation.dir}/unix/functions"/>
+		</copy>				
+		
+		<!-- copy shared java libs -->
+		<mkdir dir="${EXPL_SCRIPT_DIR}/functions/lib"/>
+		<copy  todir="${EXPL_SCRIPT_DIR}/functions/lib" overwrite="true">
+			<fileset dir="lib">
+				<include name="*.jar"/>
+				<exclude name="ant*.jar"/>
+			</fileset>
+		</copy>
+		
+		<!-- copy shared scripts -->
+		<if>
+			<available file="${scripts.exploitation.dir}/unix/misc" type="dir"/>
+			<then>
+				<mkdir dir="${EXPL_SCRIPT_DIR}/misc"/>
+				<copy  todir="${EXPL_SCRIPT_DIR}/misc" overwrite="true">
+					<fileset dir="${scripts.exploitation.dir}/unix/misc"/>
+					<filterset refid="filters.exploitation"/> 
+				</copy>
+				<chmod perm="ug+rx">
+					<fileset dir="${EXPL_SCRIPT_DIR}/misc">
+						<include name="*.sh"/>
+						<include name="*.ksh"/>
+					</fileset>
+				</chmod>
+			</then>
+		</if>
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/unix/cft" type="dir"/>
+			<then>
+				<!-- copy CFT shared -->
+				<mkdir dir="${CFT_SCRIPT_DIR}"/>
+				<mkdir dir="${CFT_LOG_DIR}"/>	
+				<copy  todir="${CFT_SCRIPT_DIR}" overwrite="true">
+					<fileset dir="${scripts.exploitation.dir}/unix/cft"/>
+					<filterset refid="filters.exploitation"/> 
+				</copy>	
+				<chmod perm="ug+rx">
+					<fileset dir="${CFT_SCRIPT_DIR}"/>
+				</chmod>
+			</then>
+		</if>
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/mvs" type="dir"/>
+			<then>
+				<!-- copy MVS shared -->
+				<mkdir dir="${MVS_SCRIPT_DIR}"/>	
+				<copy  todir="${MVS_SCRIPT_DIR}" overwrite="true">
+					<fileset dir="${scripts.exploitation.dir}/mvs"/>		
+				</copy>	
+				<chmod perm="ug+rx">
+					<fileset dir="${MVS_SCRIPT_DIR}"/>
+				</chmod>					
+			</then>
+		</if>
+
+		<if>
+			<available file="${scripts.exploitation.dir}/unix/pgp" type="dir"/>
+			<then>
+				<!-- copy pgp shared -->
+				<mkdir dir="${PGP_SCRIPT_DIR}"/>	
+				<copy  todir="${PGP_SCRIPT_DIR}" overwrite="false">
+					<fileset dir="${scripts.exploitation.dir}/unix/pgp"/>		
+				</copy>
+				<chmod perm="ug+rx">
+					<fileset dir="${PGP_SCRIPT_DIR}"/>
+				</chmod>
+			</then>
+		</if>
+		
+		<if>
+			<available file="${scripts.exploitation.dir}/certificates" type="dir"/>
+			<then>
+				<!-- copy SSL shared -->
+				<mkdir dir="${SSL_CERTIFICATES_DIR}"/>	
+				<copy  todir="${SSL_CERTIFICATES_DIR}" overwrite="false">
+					<fileset dir="${scripts.exploitation.dir}/certificates"/>		
+				</copy>										
+			</then>
+		</if>				
+   </target>
+   
+   
+    <!-- ================================= 
+          target: _create_symlink_cluster_unix
+        ================================= -->
+   <target name="_create_symlink_cluster_unix" depends="_loadConfig" if="domain.clustered.unix">		
+							
+		<!-- get existing link -->
+		<var name="links" unset="true"/>
+										
+		<exec executable="bash" outputproperty="links" dir="${installation.file.dirname}">					
+			<arg value="-c"/>
+			<arg value="${cmdfindlinks} | grep ${installation.file.basename}"/>
+		</exec>										    														
+			
+		<!-- if no existing link -->				
+		<if>
+			<length string="${links}" trim="true" length="0" />
+			<then>
+				<if>
+					<available file="${installation.file.converted}"/>
+					<then>
+						<copy file="${installation.file.converted}" todir="${EXPL_CONF_DIR}"/>
+						<delete file="${installation.file.converted}"/>
+					</then>
+				</if>
+			</then>
+			<else>
+				<For list="${links}" param="link" delimiter="${line.separator}">
+					<sequential>						
+						<symlink action="delete" link="${installation.file.dirname}/@{link}" failonerror="false"/>
+					</sequential>
+				</For>
+			</else>
+		</if>
+		
+		<!-- get existing link -->
+		<var name="links" unset="true"/>		
+		<exec executable="bash" outputproperty="links" dir="${user.home}">					
+			<arg value="-c"/>
+			<arg value="${cmdfindlinks} | grep vpd.properties.tibco"/>
+		</exec>	
+		
+		
+		<!-- if no existing link -->
+		<if>
+			<length string="${links}" trim="true" length="0" />
+			<then>
+				<copy todir="${EXPL_CONF_DIR}">
+					<fileset dir="${user.home}">
+						<include name="vpd.properties.tibco*"/>
+					</fileset>
+				</copy>
+				<delete>
+					<fileset dir="${user.home}">
+						<include name="vpd.properties.tibco*"/>
+					</fileset>
+				</delete>
+			</then>
+			<else>
+				<For list="${links}" param="link" delimiter="${line.separator}">
+					<sequential>						
+						<symlink action="delete" link="${user.home}/@{link}" failonerror="false"/>
+					</sequential>
+				</For>
+			</else>
+		</if>
+
+		<!-- Create all links -->
+		<For param="file">
+			<path>
+				<fileset dir="${EXPL_CONF_DIR}">
+					<include name="vpd.properties.tibco*"/>
+					<include name="${installation.file.basename}"/>
+				</fileset>
+			</path>
+			<sequential>		
+				<var name="current.file" unset="true"/>
+				<basename file="@{file}" property="current.file"/>
+				<symlink action="single" link="${user.home}/${current.file}" resource="@{file}" overwrite="true" failonerror="true" />	
+			</sequential>
+		</For>											
+   </target>
+      
+    <!-- ================================= 
+          target: _create_symlink_logs_unix
+        ================================= -->
+   <target name="_create_symlink_logs_unix" depends="_loadConfig" if="isUnix">		
+	
+		<if>
+			<available file="${TRA_domain_applications_dir}" type="dir"/>
+			<then>			
+				<var name="links" unset="true"/>
+				
+				<!-- get existing link -->
+				<exec executable="bash" outputproperty="links" dir="${TRA_domain_applications_dir}">					
+					<arg value="-c"/>
+					<arg value="${cmdfindlinks} | grep logs"/>
+				</exec>										    	
+															
+				<!-- if no existing link -->				
+				<if>
+					<and>
+						<length string="${links}" trim="true" length="0" />
+						<available file="${TRA_domain_applications_log_dir}" type="dir"/>
+					</and>
+					<then>
+						<mkdir dir="${TIBCO_APPS_LOG_DIR}"/>
+						<copy todir="${TIBCO_APPS_LOG_DIR}">
+							<fileset dir="${TRA_domain_applications_log_dir}"/>					
+						</copy>
+						<delete dir="${TRA_domain_applications_log_dir}" failonerror="false" includeemptydirs="true"/>
+						<symlink action="single" link="${TRA_domain_applications_log_dir}" resource="${TIBCO_APPS_LOG_DIR}" overwrite="true" failonerror="true" />
+					</then>
+				</if>
+			</then>
+			<else>
+				<!-- Create link -->
+				<mkdir dir="${TRA_domain_applications_dir}"/>
+				<mkdir dir="${TIBCO_APPS_LOG_DIR}"/>
+				<symlink action="single" link="${TRA_domain_applications_log_dir}" resource="${TIBCO_APPS_LOG_DIR}" overwrite="true" failonerror="true" />
+			</else>
+		</if>
+		
+		<if>
+			<available file="${TRA_executable_dir}" type="dir"/>
+			<then>
+				<var name="links" unset="true"/>
+				
+				<!-- get existing link -->
+				<exec executable="bash" outputproperty="links" dir="${TRA_executable_dir}">					
+					<arg value="-c"/>
+					<arg value="${cmdfindlinks} | grep logs"/>
+				</exec>	
+								
+				<!-- if no existing link -->				
+				<if>
+					<and>
+						<length string="${links}" trim="true" length="0" />
+						<available file="${TRA_domain_tra_log_dir}" type="dir"/>
+					</and>
+					<then>
+						<mkdir dir="${TIBCO_TRA_LOG_DIR}"/>
+						<copy todir="${TIBCO_TRA_LOG_DIR}">
+							<fileset dir="${TRA_domain_tra_log_dir}"/>					
+						</copy>
+						<delete dir="${TRA_domain_tra_log_dir}" failonerror="false" includeemptydirs="true"/>
+						<symlink action="single" link="${TRA_domain_tra_log_dir}" resource="${TIBCO_TRA_LOG_DIR}" overwrite="true" failonerror="true" />
+					</then>			
+				</if>
+			</then>
+			<else>
+				<!-- Create link -->
+				<mkdir dir="${TRA_domain_tra_log_dir}"/>
+				<mkdir dir="${TIBCO_TRA_LOG_DIR}"/>
+				<symlink action="single" link="${TRA_domain_tra_log_dir}" resource="${TIBCO_TRA_LOG_DIR}" overwrite="true" failonerror="true" />
+			</else>
+		</if>
+   </target>
+   
+    <!-- ================================= 
+          target: copy scripts
+        ================================= -->
+   <target name="_copy_expl_scripts" depends="_create_services,_remove_expl_scripts,_install_softdeployer,_copy_expl_scripts_unix,_copy_expl_scripts_windows,_create_symlink_cluster_unix"/>	   
+   
+    <!-- ================================= 
+          target: _install_softdeployer
+        ================================= -->
+    <target name="_install_softdeployer" if="do_install_softdeployer" depends="_loadConfig">	
+		
+		<var name="softdeployer.basename" unset="true"/>
+		<basename file="${SOFT_DEPLOYER_DIR}" property="softdeployer.basename"/>
+		<var name="softdeployer.config" value="${softdeployer.basename}_config"/>
+						
+		<!-- SOFTDeployer link -->
+		<symlink action="single" link="${EXPL_SCRIPT_DIR}/${softdeployer.basename}" resource="${SOFT_DEPLOYER_DIR}" overwrite="true" failonerror="false" />						
+											
+		<if>
+			<and>
+				<available file="${SOFT_DEPLOYER_DIR}/properties/config" type="dir"/>
+				<isset property="do_install_softdeployer_config"/>
+			</and>
+			<then>
+			
+				<!-- SOFTDeployer config dir -->
+				<mkdir dir="${EXPL_SCRIPT_DIR}/${softdeployer.config}"/>					
+				<copy  todir="${EXPL_SCRIPT_DIR}/${softdeployer.config}" overwrite="false" granularity="315360000000">
+					<fileset dir="${SOFT_DEPLOYER_DIR}/properties/config">				
+						<include name="**/*"/>
+					</fileset>
+				</copy>
+				
+				<!-- may cause error but must ignore it -->
+				<symlink action="delete" link="${SOFT_DEPLOYER_DIR}/properties/config" failonerror="false"/>
+				
+				<if>
+					<available file="${SOFT_DEPLOYER_DIR}/properties/config" type="dir"/>
+					<then>
+						<delete includeemptydirs="true">
+							<fileset dir="${SOFT_DEPLOYER_DIR}/properties/config"/>				
+						</delete>
+					</then>
+				</if>
+				
+				<!-- SOFTDeployer config link -->
+				<symlink action="single" link="${SOFT_DEPLOYER_DIR}/properties/config" resource="${EXPL_SCRIPT_DIR}/${softdeployer.config}" overwrite="true" failonerror="false" />	
+			</then>
+			<elseif>
+				<isset property="do_install_softdeployer_config"/>
+				<then>
+					<!-- SOFTDeployer config dir -->
+					<mkdir dir="${EXPL_SCRIPT_DIR}/${softdeployer.config}"/>	
+					
+					<!-- may cause error but must ignore it -->
+					<symlink action="delete" link="${SOFT_DEPLOYER_DIR}/properties/config" failonerror="false"/>
+					
+					<!-- SOFTDeployer config link -->
+					<symlink action="single" link="${SOFT_DEPLOYER_DIR}/properties/config" resource="${EXPL_SCRIPT_DIR}/${softdeployer.config}" overwrite="true" failonerror="false" />	
+				</then>
+			</elseif>
+		</if>						
+	</target>
+
+	
+	 <!-- ================================= 
+	        target: _create_softdeployer_profile
+	 ================================= -->
+	<target name="_create_softdeployer_profile" if="softdeployer.installed" depends="_loadConfig">
+		
+		<!-- create config dir  -->
+		<var name="softdeployer.profile.dir" value="${SOFT_DEPLOYER_DIR}/properties/config/${PROJECT_PROFILE}"/>
+		<mkdir dir="${softdeployer.profile.dir}"/>		
+		
+		<!-- create installation file  -->	  
+		<copy todir="${softdeployer.profile.dir}" overwrite="false" granularity="${scripts.granularity}">
+			<fileset dir="${soft_templates_dir}">
+				<include name="${soft_deployer_template_installation_file}"/>
+			</fileset>
+			<filterset refid="soft.project.filters"/> 
+			<filterset refid="filters.exploitation"/>			
+			<mergemapper to="installation.properties"/> 
+		</copy>				
+		
+		<!-- Load config once created  -->
+		<SoftDeployerConfig release="true" profilekey="PROJECT_PROFILE" exportKeyPrefix="deployer."/>
+		
+		<!-- Create project tree  -->
+		<mkdir dir="${deployer.generate_base_dir}" />
+		<mkdir dir="${deployer.generate_dir}" />
+		<mkdir dir="${deployer.specification.generator.output.base.dir}" />
+		<mkdir dir="${deployer.generator.dir.lib}" />
+		<mkdir dir="${deployer.referentiel_flux_local_dir}" />
+		<mkdir dir="${deployer.flow.generator.data.files.dir}" />
+		<mkdir dir="${deployer.pack_dir_livraison}" />
+		
+		<!-- copy ref file  -->	
+		<copy todir="${deployer.referentiel_flux_local_dir}" overwrite="false"  granularity="${scripts.granularity}">
+			<fileset dir="${soft_templates_dir}">
+				<include name="${soft_deployer_template_referential_file}"/>
+			</fileset>					
+			<mergemapper to="${deployer.referentiel_flux}"/> 
+		</copy>
+		
+		<!-- copy ref param file  -->	
+		<copy todir="${deployer.referential_param_local_dir}" overwrite="false"  granularity="${scripts.granularity}">
+			<fileset dir="${soft_templates_dir}">
+				<include name="${soft_deployer_template_parameters_file}"/>
+			</fileset>					
+			<mergemapper to="${deployer.referential_param_file}"/> 
+		</copy>
+	</target>
+	
+	
+    <!-- ================================= 
+          target: start_services              
+        ================================= -->
+   <target name="_start_services" depends="_copy_expl_scripts,_create_symlink_logs_unix">
+		<!-- start -->
+		<startDomain/>		
+   </target>
+   
+   <!-- ================================= 
+          target: _start_domain              
+        ================================= -->
+   <target name="_start_domain">
+		<!-- start -->
+		<stopDomain failonerror="false"/>
+		<startDomain />		
+   </target>
+   
+   <!-- ================================= 
+          target: stop_services              
+        ================================= -->
+   <target name="_stop_services" depends="_loadConfig">		
+		<stopDomain failonerror="false"/>	
+   </target>
+   
+    <!-- ================================= 
+          target: change_domain_credentials
+         ================================= -->
+    <target name="_change_domain_credentials" depends="_loadConfig">		
+	
+		<!-- check status started -->
+		<checkDomain status="started"/>
+								
+		<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+		<mkdir dir="${tmpDir}"/>
+		<copy todir="${tmpDir}" overwrite="true"> 
+			<fileset dir="${templates.dir}/tra"/>
+			<filterset refid="filters.domains"/>					
+		</copy>
+					
+		<!-- change credential --> 	  
+		<if>
+			<and>
+				<not><length string="${TRA_domain_password_old}" trim="true" length="0" /></not>
+				<not><equals arg1="${TRA_domain_password_old}" arg2="${TRA_domain_password}" casesensitive="true" trim="false" /></not>
+			</and>
+			<then>
+				<!-- change user password  -->
+				<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+					<arg line="-cmdFile '${tmpDir}'/ChangeDomainCredentials.xml -verbose"/>
+				</exec>								
+			</then>
+		</if>
+												
+		<!-- rewrite conf -->
+		 <java classname="fr.squareit.soft.deployer.tibco.shell.PropertyFileWriter" outputproperty="conf.modified">
+				 <arg value="${conf.converted}"/>					 
+				 <arg value="TRA_domain_password_old"/>
+				 <classpath refid="script.classpath" />
+		 </java>	 
+		
+		 <echo file="${conf.converted}" message="${conf.modified}"/>
+		 <echo message="${conf.converted} rewritten" level="info"/>
+					 
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>
+		    	
+    </target>
+
+   <!-- ================================= 
+          target: change_credentials
+         ================================= -->
+    <target name="_change_credentials" depends="_loadConfig">		
+	
+		<!-- check status started -->
+		<checkDomain status="started"/>
+								
+		<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+		<mkdir dir="${tmpDir}"/>
+		<copy todir="${tmpDir}" overwrite="true"> 
+			<fileset dir="${templates.dir}/tra"/>
+			<filterset refid="filters.domains"/>					
+		</copy>
+					
+		<!-- change credential --> 	  
+		<if>
+			<and>
+				<not><length string="${TRA_domain_password_old}" trim="true" length="0" /></not>
+				<not><equals arg1="${TRA_domain_password_old}" arg2="${TRA_domain_password}" casesensitive="true" trim="false" /></not>
+			</and>
+			<then>
+				<!-- change user password  -->
+				<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+					<arg line="-cmdFile '${tmpDir}'/ChangeDomainCredentials.xml -verbose"/>
+				</exec>								
+			</then>
+		</if>
+			
+		<!--  change db params   --> 
+		<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+			<arg line="-cmdFile '${tmpDir}'/ModifyDBConfiguration.xml -verbose"/>
+		</exec> 
+				
+		<!-- modify ems credential --> 
+		<ant antfile="${basedir}/ant/manageEMSServers.xml" 
+			 target="update_credentials" 
+			 inheritall="false">			 
+		</ant>						
+											
+		<!--  change domain transport params  -->	  
+		<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+			<arg line="-cmdFile '${tmpDir}'/ModifyEMSParameters.xml -verbose"/>
+		</exec> 
+		
+		<!--  change domains params  -->		
+		<antcall target="_update_hawk_and_admin_params" inheritall="false"/>
+			
+		<!-- ems plugin should be modified once adminstrator password is changed -->		
+		
+		<!-- update SOFTMonitor -->
+		<ant antfile="${basedir}/ant/deploySOFTMonitor.xml" 
+			 target="update" 
+			 inheritall="false">			 
+		</ant>		
+									
+		<!-- rewrite conf -->
+		 <java classname="fr.squareit.soft.deployer.tibco.shell.PropertyFileWriter" outputproperty="conf.modified">
+				 <arg value="${conf.converted}"/>					 
+				 <arg value="TRA_domain_password_old"/>
+				 <classpath refid="script.classpath" />
+		 </java>	 
+		
+		 <echo file="${conf.converted}" message="${conf.modified}"/>
+		 <echo message="${conf.converted} rewritten" level="info"/>
+					 
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>
+		    	
+    </target>
+
+ 	<!-- ================================= 
+          target: migrate_domain_57
+         ================================= -->
+    <target name="_migrate_domain_57" depends="_loadConfig">		
+	
+		
+    	<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/tra"/>
+    		<filterset refid="filters.domains"/>					
+    	</copy>
+    	    					
+		 		 
+    	<!-- migrate --> 
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="false">
+    	    <arg line="-cmdFile '${tmpDir}'/MigrateDomainTo57.xml -verbose"/>
+    	</exec>    	
+		 	  
+		     		    	    
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>
+				    	
+    </target>
+	
+	
+	<!-- ================================= 
+          target: _migrate_domain_58
+         ================================= -->
+    <target name="_migrate_domain_58" depends="_loadConfig">		
+	
+		
+    	<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/tra"/>
+    		<filterset refid="filters.domains"/>					
+    	</copy>
+    	    					
+		 		 
+    	<!-- migrate --> 
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="false">
+    	    <arg line="-cmdFile '${tmpDir}'/MigrateDomainTo58.xml -verbose"/>
+    	</exec>    	
+		 	  
+		     		    	    
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>
+				    	
+    </target>
+
+	<!-- ================================= 
+          target: _migrate_domain_59
+         ================================= -->
+    <target name="_migrate_domain_59" depends="_loadConfig">		
+	
+		
+    	<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/tra"/>
+    		<filterset refid="filters.domains"/>					
+    	</copy>
+    	    					
+		 		 
+    	<!-- migrate --> 
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="false">
+    	    <arg line="-cmdFile '${tmpDir}'/MigrateDomainTo59.xml -verbose"/>
+    	</exec>    	
+		 	  
+		     		    	    
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>
+				    	
+    </target>
+
+
+    <!-- ================================= 
+          target: delete_domain              
+         ================================= -->
+    <target name="_delete_domain" depends="_loadConfig">		
+    	
+    	<!-- stop domain -->
+    	<stopDomain failonerror="false"/>    	
+    	
+		<!-- delete default domain files -->
+		<delete dir="${TRA_default_dir}" failonerror="false" includeemptydirs="true" />	
+		
+    	<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/tra"/>
+    		<filterset refid="filters.domains"/>    		
+    	</copy>
+    	
+    	<!-- invoke tibco cmdline tool -->    	
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+    	    <arg line="-cmdFile '${tmpDir}'/DeleteDomain.xml -verbose"/>
+    	</exec>    		
+    	
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+
+		<!-- Delete domain data -->
+		<delete dir="${TRA_domain_admin_dir}/${TRA_domain}" failonerror="false" includeemptydirs="true"/>
+		<delete dir="${TRA_domain_tra_dir}/${TRA_domain}" failonerror="false" includeemptydirs="true"/>
+    	     	
+    </target>
+		 
+
+	
+    <!-- ================================= 
+         target: _delete_services-unix              
+     ================================= -->
+   <target name="_delete_services-unix"  if="isUnix" depends="_delete_domain">	   		
+	<delete failonerror="false">     	   	
+		<fileset dir="${EXPL_SERVICES_DIR}" includes="${ADMIN_unix_service},${TRA_unix_service}"/>
+	</delete>
+   </target>
+
+
+    <!-- ================================= 
+          target: addMachineToDomain              
+         ================================= -->
+    <target name="_addMachineToDomain" depends="_loadConfig">		
+    	   
+	<stopDomain failonerror="false"/>
+
+    	<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+    	<mkdir dir="${tmpDir}"/>
+		<!-- replace -->
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/tra"/>
+    		<filterset refid="filters.domains"/>    		    	
+    	</copy>
+    	
+    	<!-- invoke tibco cmdline tool -->
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+    	    <arg line="-cmdFile '${tmpDir}'/AddMachineEMS.xml -verbose"/>
+    	</exec>    		    	
+    	 
+    	
+    	<!-- clean -->
+    	<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/> 
+
+		<!-- reset vars -->
+		<var name="hawk_agent_configured" unset="true"/>
+		<var name="administrator_configured" unset="true"/>		
+		<available file="${TRA_executable}" property="hawk_agent_configured"/>
+		<available file="${ADMIN_executable}" property="administrator_configured"/>
+		
+    </target>	
+			
+	
+	<!-- ================================= 
+          target: _delete_domain_config              
+         ================================= -->
+    <target name="_delete_domain_config" depends="_loadConfig">
+		<if>
+			<available file="${domain.conf.file}"/>
+			<then>
+				<chmod perm="u+w" file="${domain.conf.file}"/>
+			</then>
+		</if>
+		<delete file="${domain.conf.file}" failonerror="false"/>   	    	    	
+    </target>
+	
+	
+	  <!-- ================================= 
+          target: deploy_mft_agent_cli_windows              
+         ================================= -->
+    <target name="_deploy_mft_agent_cli_windows" depends="_loadConfig" if="isWindows">								
+	
+	<if>
+		<isset property="mft_agent_installed"/>
+		<then>
+			
+			<!-- create if different -->
+			<mkdir dir="${tibco_mftagent_deployment_dir}"/>
+			
+	    	<copy todir="${tibco_mftagent_deployment_dir}" overwrite="true"> 
+    			<fileset dir="${templates.dir}/mft/windows"/>				
+    			<filterset refid="filters.mft.agent"/>
+				<mapper>
+					<globmapper from="mftagent-agentname-client.tra" to="${TIBCO_hub_peerAgentInstance_cli_tra}"/>
+					<globmapper from="mftagent-agentname-client.cmd" to="${TIBCO_hub_peerAgentInstance_cmd}"/>
+					<globmapper from="mftagent-agentname.tra" to="${TIBCO_hub_peerAgentInstance_agent_tra}"/>
+					<globmapper from="mftagent-agentname.cmd" to="${TIBCO_hub_peerAgentInstance_agent_cmd}"/>
+				</mapper>			
+		    </copy> 
+		</then>
+	</if>   	    	    	    		    	    		
+    </target>
+	
+	  <!-- ================================= 
+          target: deploy_mft_agent_cli_unix              
+         ================================= -->
+    <target name="_deploy_mft_agent_cli_unix" depends="_loadConfig" if="isUnix">		    	    	    	    	
+		
+	<if>
+		<isset property="mft_agent_installed"/>		
+		<then>
+			<!-- create if different -->
+			<mkdir dir="${tibco_mftagent_deployment_dir}"/>
+			
+		    <copy todir="${tibco_mftagent_deployment_dir}" overwrite="true"> 
+    			<fileset dir="${templates.dir}/mft/unix"/>				
+    			<filterset refid="filters.mft.agent"/>
+				<mapper>
+					<globmapper from="mftagent-agentname-client.tra" to="${TIBCO_hub_peerAgentInstance_cli_tra}"/>
+					<globmapper from="mftagent-agentname-client.sh" to="${TIBCO_hub_peerAgentInstance_cmd}"/>
+					<globmapper from="mftagent-agentname.tra" to="${TIBCO_hub_peerAgentInstance_agent_tra}"/>
+					<globmapper from="mftagent-agentname.sh" to="${TIBCO_hub_peerAgentInstance_agent_cmd}"/>										
+				</mapper>			
+    		    </copy>
+		    <chmod perm="ug+x">
+				<fileset dir="${tibco_mftagent_deployment_dir}"  includes="${TIBCO_hub_peerAgentInstance_cmd},${TIBCO_hub_peerAgentInstance_agent_cmd}"/>
+		     </chmod>
+		     <mkdir dir="${MFT_mfthubagent_tmp_dir}"/>
+		</then>
+	</if>
+    </target>
+	
+	
+	<!-- ================================= 
+          target: _deploy_mft_hubagent             
+        ================================= -->
+    <target name="_deploy_mft_hubagent" depends="_loadConfig" if="mft_server_installed">
+	
+		<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}/mftagentgen"/>
+    	
+		<mkdir dir="${tmpDir}"/>
+								
+		<!-- replace -->
+		<copy todir="${tmpDir}" overwrite="true"> 
+			<fileset dir="${templates.dir}/mft" includes="*.xml"/>
+			<filterset refid="filters.mft.agent"/>   				
+		</copy>
+		
+		<echo message="Launching agent generator ${tibco_mft_agentgen_bin_dir}/mftagentgen" level="info"/>
+		<exec dir="${tibco_mft_agentgen_bin_dir}" executable="${tibco_mft_agentgen_bin_dir}/mftagentgen" spawn="false" failonerror="false">
+			<arg line="${MFT_datasource_url}" />
+			<arg line="${MFT_datasource_driver}" />
+			<arg line="${MFT_datasource_username}" />
+			<arg line="${MFT_datasource_password}" />
+			<arg line="'${tmpDir}'/mftAgentGenerator.xml" />						
+		</exec>
+		
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>	
+				
+	</target>
+	
+	
+	
+	  <!-- ================================= 
+          target: _create_mftagent_services
+         ================================= -->
+    <target name="_create_mftagent_services" depends="_remove_mftagent_services" if="mft_agent_installed">	
+		
+		<if>
+			<available file="${tibco_mftagent_deployment_dir}/${TIBCO_hub_peerAgentInstance_agent_tra}"/>
+			<then>
+				<mkdir dir="${MFT_mfthubagent_tmp_dir}"/>
+				<if>
+					<isset property="isWindows"/>
+					<then>
+						<echo message="Installing ${MFT_hubagent_windows_service} windows service" level="info"/>
+						<exec dir="${tibco_mftagent_dir}" executable="${tibco_mftagent_dir}/bin/mftagent.exe" spawn="false" failonerror="true">
+							<arg line="--install" />
+							<arg line="--propFile" />
+							<arg line="'${tibco_mftagent_deployment_dir}'/${TIBCO_hub_peerAgentInstance_agent_tra}" />																		
+						</exec>					
+					</then>
+					<else>
+						
+						<!-- make start/stop -->
+						<mkdir dir="${EXPL_SERVICES_DIR}"/>
+	
+						<!-- server -->
+						<if>
+							<isset property="mft_server_installed"/>
+							<then>
+								<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+									<fileset dir="${expl.os.template.dir}">
+										<include name="MFT-Single-Server"/>
+									</fileset>
+									<filterset refid="filters.domains"/>  							
+									<filterset refid="filters.exploitation"/> 
+									<filterset refid="filters.mft.agent"/>
+									<mergemapper to="${MFT_mftserver_unix_service}"/>
+								</copy>
+							</then>
+						</if>
+						
+						<!-- hub agent -->
+						<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+							<fileset dir="${expl.os.template.dir}">
+								<include name="MFTAgent"/>
+							</fileset>
+							<filterset refid="filters.domains"/>  							
+							<filterset refid="filters.exploitation"/> 
+							<filterset refid="filters.mft.agent"/> 							
+							<mergemapper to="${MFT_hubagent_unix_service}"/>
+						</copy>
+    		
+						<chmod perm="ug+x">
+							<fileset dir="${EXPL_SERVICES_DIR}" includes="${MFT_mftserver_unix_service},${MFT_hubagent_unix_service}"/>
+						</chmod>										
+					</else>
+				</if>								
+			</then>
+		</if>   	    	    	    		    	    		
+    </target>		
+	
+	  <!-- ================================= 
+          target: _remove_mftagent_services
+         ================================= -->
+    <target name="_remove_mftagent_services" depends="_stop_mftagent_services" if="mft_agent_installed">	
+		<if>
+			<available file="${tibco_mftagent_deployment_dir}/${TIBCO_hub_peerAgentInstance_agent_tra}"/>
+			<then>				
+				<if>
+					<isset property="isWindows"/>
+					<then>
+						<echo message="Removing ${MFT_hubagent_windows_service} windows service" level="info"/>
+						<exec dir="${tibco_mftagent_dir}" executable="${tibco_mftagent_dir}/bin/mftagent.exe" spawn="false" failonerror="false">
+							<arg line="--uninstall" />
+							<arg line="--propFile" />
+							<arg line="'${tibco_mftagent_deployment_dir}'/${TIBCO_hub_peerAgentInstance_agent_tra}" />																		
+						</exec>					
+					</then>
+					<else>
+						<delete>
+							<fileset dir="${EXPL_SERVICES_DIR}" includes="${MFT_mftserver_unix_service},${MFT_hubagent_unix_service}"/>
+						</delete>
+					</else>
+				</if>
+			</then>
+		</if> 
+	</target>	
+	
+	  <!-- ================================= 
+          target: _remove_mftagent_cli
+         ================================= -->
+    <target name="_remove_mftagent_cli" if="mft_agent_installed">	
+		<if>
+			<available file="${tibco_mftagent_deployment_dir}/${TIBCO_hub_peerAgentInstance_agent_tra}"/>
+			<then>				
+				<!-- delete client files -->
+				<delete>
+					<fileset dir="${tibco_mftagent_deployment_dir}" includes="${TIBCO_hub_peerAgentInstance_cmd},${TIBCO_hub_peerAgentInstance_agent_cmd},${TIBCO_hub_peerAgentInstance_cli_tra},${TIBCO_hub_peerAgentInstance_agent_tra}"/>
+				</delete>				
+			</then>
+		</if> 
+	</target>	
+	
+	 <!-- ================================= 
+          target: _stop_mftagent_services
+         ================================= -->
+    <target name="_stop_mftagent_services" depends="_loadConfig" if="mft_agent_installed">					
+		<if>
+			<isset property="isWindows"/>
+			<then>
+				<echo message="Stopping ${MFT_hubagent_windows_service} windows service" level="info"/>
+				<exec executable="cmd" failonerror="false">
+					<arg value="/c" />
+					<arg value="net stop ${MFT_hubagent_windows_service}"/>
+				</exec>										
+			</then>
+			<else>
+				<if>
+					<available file="${EXPL_SERVICES_DIR}/${MFT_hubagent_unix_service}"/>
+					<then>
+						<echo message="Stopping MTF Agent: ${MFT_hubagent_unix_service}" level="info"/>
+						<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${MFT_hubagent_unix_service}" spawn="false" failonerror="false">
+							<arg value="stop" />
+						</exec>
+					</then>
+				</if>
+			</else>
+		</if>							
+	</target>
+</project>

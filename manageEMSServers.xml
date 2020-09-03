@@ -1,0 +1,955 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!-- ====================================================================== 
+     22 févr. 07 10:48:43                                                        
+
+     project  : SOFTInstalller
+     description : Creation des serveur EMS
+                   
+     fxbrun                                                                
+     ====================================================================== -->
+<project name="SOFTInstalller" default="create_servers" basedir="..">    	
+		
+	 <!-- include task definition -->
+	 <import file="${basedir}/common/taskdef-scripts.xml"/>
+
+	 <!-- include install definition -->
+	 <import file="${basedir}/common/scripts_definition.xml"/>
+
+	<!-- include filter definition -->
+	<import file="${basedir}/common/filters.xml"/>
+
+	<!-- ================================= 
+	        create_servers   
+       ================================= -->
+     <target name="create_servers" depends="_create_dom_server,_sleep,_create_app_server,_create_fom_server,_create_ems_services_dom,_create_ems_services_app,_create_ems_services_fom"/>
+
+	<!-- ================================= 
+	        remove_servers   
+       ================================= -->
+     <target name="remove_servers" depends="_delete_service_ems_app,_delete_service_ems_fom,_delete_service_ems_dom"/>
+	
+    <!-- ================================= 
+          target: create_unix_services              
+      ================================= -->
+      <target name="create_unix_services" depends="_create_ems_services_dom,_create_ems_services_app,_create_ems_services_fom"/>
+	
+	<!-- ================================= 
+          target: update_credentials              
+      ================================= -->
+      <target name="update_credentials" depends="_update_ems_dom_credentials,_update_ems_app_credentials,_export_domain_config,_update_ems_services_dom,_update_ems_services_app"/>
+	
+	
+	<!-- ================================= 
+         target: register_ems_servers
+        ================================= -->
+    <target name="register_ems_servers" depends="_register_dom_server,_register_app_server,_register_fom_server"/>
+	
+    <!-- ================================= 
+          target: loadConfig              
+         ================================= -->
+    <target name="_loadConfig" depends="_loadEnvironement,define_filters">
+    	   		
+		<!-- create log dir  -->
+		<mkdir dir="${TIBCO_LOGS}"/>
+    		
+    	<!-- same server -->
+    	<condition property="domIsApp">	
+    		<equals arg1="${EMS_address}" arg2="${TRA_domain_ems_adress}"/>
+    	</condition>   
+    	
+    	<!-- do create dom server -->
+    	<condition property="doCreateDOMServer">	
+    	 	<and>
+    	 		<isLocalIpAddress address="${EMS_DOM_host}"/>  
+    	 		<not><istrue value="${domIsApp}"/></not>
+    	 	</and>
+    	 </condition>    	
+    	<condition property="doCreateDOMServerService">	
+    	    <and>
+    	    	<istrue value="${doCreateDOMServer}"/>
+    	    	<isset property="expl.os.template.dir"/>
+    	    	<isset property="isUnix"/>    	    	
+    	    </and>
+    	</condition>
+    	
+    	<!-- do create app server -->
+    	 <condition property="doCreateAPPServer">	
+    	 	<isLocalIpAddress address="${EMS_APP_host}"/>    	 	
+    	 </condition>
+    	<condition property="doCreateAPPServerService">	
+    	    <and>
+    	    	<istrue value="${doCreateAPPServer}"/>
+    	    	<isset property="expl.os.template.dir"/>
+    	    	<isset property="isUnix"/>   
+    	    </and>
+    	</condition>
+		
+		
+		<!-- FOM server -->
+    	<condition property="doCreateFOMServer">	
+			<and>
+				<not><equals arg1="${EMS_FOM_address}" arg2="${TRA_domain_ems_adress}"/></not>
+				<not><equals arg1="${EMS_FOM_address}" arg2="${EMS_address}"/></not>
+				<isLocalIpAddress address="${EMS_FOM_host}"/>  
+			</and>
+    	</condition>
+		<condition property="doCreateFOMServerService">	
+    	    <and>
+    	    	<istrue value="${doCreateFOMServer}"/>
+    	    	<isset property="expl.os.template.dir"/>
+    	    	<isset property="isUnix"/>   
+    	    </and>
+    	</condition>
+    </target>
+    
+    <!-- ================================= 
+          target: _check_template              
+      ================================= -->
+    <target name="_check_template" depends="_loadConfig">
+	<if>
+		<or>
+			<not><isset property="tibco_ems_conf"/></not>
+			<not><isset property="tibco_ems_conf_dir"/></not>
+			<not><available file="${tibco_ems_conf_dir}" type="dir"/></not>
+			<not><available file="${tibco_ems_conf}"/></not>
+		</or>		
+		<then>
+			<echo message="TIBCO EMS template file ${tibco_ems_conf_dir} or directory ${tibco_ems_conf} not found, using internal templates" level="warning"/>			
+			<var name="tibco_ems_conf_dir" value="${templates.dir}/ems/conf"/>
+			<var name="tibco_ems_conf" value="${tibco_ems_conf_dir}/tibemsd.conf"/>
+		</then>
+	</if>
+     </target>
+
+           
+     <!-- ================================= 
+          target: _create_dom_server              
+         ================================= -->
+    <target name="_create_dom_server" depends="_check_template" if="doCreateDOMServer">
+	
+	
+	<!-- stop -->	            	    	    	
+    	<stopEMS serverAdress="${TRA_domain_ems_adress}" port="${EMS_DOM_PortNumber}" user="${TRA_domain_ems_user}" password="${TRA_domain_ems_passwd}" failonerror="false"/>
+    	
+    	<!-- delete conf if exists -->
+    	<delete dir="${EMS_DOM_CONFIG_DIR}" failonerror="false" verbose="false" includeemptydirs="true"/>
+    	    	    	
+    	<!--  Create  dir -->
+    	<mkdir dir="${EMS_DOM_CONFIG_DIR}"/>
+    	<mkdir dir="${EMS_DOM_store}"/>
+		<mkdir dir="${EMS_DOM_shared_config}"/>
+		    		
+		<!--  Copy default defined queues defs etc.. -->	
+		<copy todir="${EMS_DOM_shared_config}" overwrite="false">
+			<fileset dir="${tibco_ems_conf_dir}">
+				<include name="*.conf"/>
+				<exclude name="*emsd*"/>
+				<exclude name="*stores*"/>
+				<exclude name="*tibrvcm*"/>
+				<exclude name="*transports*"/>			
+			</fileset>
+		</copy> 
+
+    	<!-- change replace properties of tibemsd.conf -->
+    	<PropertyReplace inputprefix="${EMS_DOM_propertyprefix}" originalfile="${tibco_ems_conf}" output="${EMS_DOM_CONFIG_FILE}">
+    		<PropertyMapping key="listen" value="listen_ssl"/>
+    	</PropertyReplace>
+		
+		<!-- concat addons properties -->
+		<concat destfile="${EMS_DOM_CONFIG_FILE}" append="true">
+			<fileset file="${templates.dir}/ems/tibemsd.conf" />			
+		</concat>
+   		
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${EMS_DOM_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<var name="emsInit" value="${tmpDir}/initEMS${EMS_DOM_server}.txt"/>
+    	<copy tofile="${emsInit}" file="${templates.dir}/ems/initEMSDOM.txt" overwrite="true"> 
+    		<filterset refid="filters.domains"/>
+    		<filterset refid="filters.ems"/>
+    		<filterset refid="filters.ems.dom"/>
+			<filterset refid="filters.soft"/>
+    	</copy> 
+    	
+		<!-- replace stores --> 
+		<echo message="copying stores.conf"/>
+		<copy file="${templates.dir}/ems/stores.conf" todir="${EMS_DOM_shared_config}" overwrite="true"> 
+			<filterset refid="filters.ems.dom"/>
+		</copy>
+		
+		
+		<!-- Register --> 
+		<if>
+			<isset property="isWindows"/>
+			<then>
+				<registerEMS port="${EMS_DOM_PortNumber}" configFile="${EMS_DOM_CONFIG_FILE}"/>    		
+			</then>
+		</if>
+
+		<!-- initEMS  -->    	
+		<initEMS configDir="${EMS_DOM_CONFIG_DIR}" 
+			configFile="${EMS_DOM_CONFIG_FILE}" 
+			serverAdress="${TRA_domain_ems_adress}" 
+			port="${EMS_DOM_PortNumber}" 
+			user="${TRA_domain_ems_user}" 
+			password="${TRA_domain_ems_passwd}" 		
+			script="${emsInit}"/>		
+			
+	</target>	
+        
+		
+    <!-- ================================= 
+          target: _create_app_server              
+      ================================= -->
+    <target name="_create_app_server" depends="_check_template" if="doCreateAPPServer">
+	
+		<!-- stop -->	            	
+		<stopEMS serverAdress="${EMS_address}" port="${EMS_APP_PortNumber}" user="${EMS_APP_admin_user}" password="${EMS_APP_admin_passwd}" failonerror="false"/>
+	    	    	
+    	<!-- delete conf if exists -->
+    	<delete dir="${EMS_APP_CONFIG_DIR}" failonerror="false" verbose="false" includeemptydirs="true"/>
+    	
+		<!--  Create  dir -->
+    	<mkdir dir="${EMS_APP_CONFIG_DIR}"/>
+    	<mkdir dir="${EMS_APP_store}"/>
+		<mkdir dir="${EMS_APP_shared_config}"/>
+	
+		<!--  Copy already defined queues defs etc.. -->	    			
+		<if>	
+			<and>
+				<isset property="tibco_ems_original_config_dir"/>
+				<available file="${tibco_ems_original_config_dir}/queues.conf"/>			
+			</and>
+			<then>
+				<echo message="Uses existing EMS configuration directory : ${tibco_ems_original_config_dir}" level="info"/>
+				<copy todir="${EMS_APP_shared_config}" overwrite="true">
+					<fileset dir="${tibco_ems_original_config_dir}">
+						<include name="*.conf"/>
+						<exclude name="*emsd*"/>
+						<exclude name="*stores*"/>
+						<exclude name="*tibrvcm*"/>
+						<exclude name="*transports*"/>			
+					</fileset>
+				</copy>			
+				<if>	
+					<and>
+						<isset property="tibco_ems_original_config_file"/>
+						<available file="${tibco_ems_original_config_file}"/>
+					</and>
+					<then>
+						<!-- change replace properties of tibemsd.conf using existing one -->
+						<echo message="Using existing EMS configuration file : ${tibco_ems_original_config_file}" level="info"/>
+						<PropertyReplace inputprefix="${EMS_APP_propertyprefix}" originalfile="${tibco_ems_original_config_file}" output="${EMS_APP_CONFIG_FILE}">
+							<PropertyMapping key="listen" value="listen_ssl"/>
+						</PropertyReplace>
+					</then>
+					<else>
+						<!-- change replace properties of tibemsd.conf using default -->
+						<echo message="Using default EMS configuration file : ${tibco_ems_conf}" level="warning"/>
+						<PropertyReplace inputprefix="${EMS_APP_propertyprefix}" originalfile="${tibco_ems_conf}" output="${EMS_APP_CONFIG_FILE}">
+							<PropertyMapping key="listen" value="listen_ssl"/>
+						</PropertyReplace>
+					</else>
+				</if>
+			
+			</then>
+			<elseif>
+				<isset property="tibco_ems_original_config_dir"/>
+				<then>
+					<fail message="The EMS configuration directory : ${tibco_ems_original_config_dir} doesn't seems to be a valid directory"/>
+				</then>
+			</elseif>
+			<else>
+				<echo message="Using default template dir : ${tibco_ems_conf_dir}" level="info"/>
+				<copy todir="${EMS_APP_shared_config}" overwrite="false">
+					<fileset dir="${tibco_ems_conf_dir}">
+						<include name="*.conf"/>
+						<exclude name="*emsd*"/>
+						<exclude name="*stores*"/>
+						<exclude name="*tibrvcm*"/>
+						<exclude name="*transports*"/>			
+					</fileset>
+				</copy> 
+
+				<!-- change replace properties of tibemsd.conf-->
+				<PropertyReplace inputprefix="${EMS_APP_propertyprefix}" originalfile="${tibco_ems_conf}" output="${EMS_APP_CONFIG_FILE}">    	
+					<PropertyMapping key="listen" value="listen_ssl"/>
+				</PropertyReplace>
+			
+			</else>
+		</if>	
+	  
+    		  
+		<!-- concat addons properties -->
+		<concat destfile="${EMS_APP_CONFIG_FILE}" append="true">
+			<fileset file="${templates.dir}/ems/tibemsd.conf" />			
+		</concat>
+		
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${EMS_APP_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<var name="emsInit" value="${tmpDir}/initEMS${EMS_APP_server}.txt"/>
+    	<copy tofile="${emsInit}" file="${templates.dir}/ems/initEMS.txt" overwrite="true"> 
+    		<filterset refid="filters.domains"/>
+    		<filterset refid="filters.ems"/>
+    		<filterset refid="filters.ems.app"/>
+			<filterset refid="filters.soft"/>
+    	</copy>    	    	
+    	
+		<!-- replace stores --> 
+		<echo message="copying stores.conf"/>
+		<copy file="${templates.dir}/ems/stores.conf" todir="${EMS_APP_shared_config}" overwrite="true"> 
+			<filterset refid="filters.ems.app"/>
+		</copy>
+		
+		<!-- register  -->    	
+		<if>
+			<isset property="isWindows"/>
+			<then>
+				<registerEMS port="${EMS_APP_PortNumber}" configFile="${EMS_APP_CONFIG_FILE}"/> 
+			</then>
+		</if>
+		
+		<!-- initEMS  -->    	
+		<initEMS 
+			configDir="${EMS_APP_CONFIG_DIR}" 
+			configFile="${EMS_APP_CONFIG_FILE}" 
+			serverAdress="${EMS_address}" 
+			port="${EMS_APP_PortNumber}" 
+			user="${EMS_APP_admin_user}" 
+			password="${EMS_APP_admin_passwd}" 		
+			script="${emsInit}"/>		
+	
+								
+		<!-- cleanup -->
+		<delete dir="${tmpDir}" failonerror="false" deleteonexit="true"/>
+    	
+    </target>	
+	
+	
+	 <!-- ================================= 
+          target: _create_fom_server              
+         ================================= -->
+    <target name="_create_fom_server" depends="_check_template" if="doCreateFOMServer">
+	
+	
+		<!-- stop -->	            	    	    	
+    	<stopEMS serverAdress="${EMS_FOM_address}" port="${EMS_FOM_PortNumber}" user="${EMS_FOM_admin_user}" password="${EMS_FOM_admin_passwd}" failonerror="false"/>
+    	
+    	<!-- delete conf if exists -->
+    	<delete dir="${EMS_FOM_CONFIG_DIR}" failonerror="false" verbose="false" includeemptydirs="true"/>
+    	    	    	
+    	<!--  Create  dir -->
+    	<mkdir dir="${EMS_FOM_CONFIG_DIR}"/>
+    	<mkdir dir="${EMS_FOM_store}"/>
+		<mkdir dir="${EMS_FOM_shared_config}"/>
+		    		
+		<!--  Copy default defined queues defs etc.. -->	
+		<copy todir="${EMS_FOM_shared_config}" overwrite="false">
+			<fileset dir="${tibco_ems_conf_dir}">
+				<include name="*.conf"/>
+				<exclude name="*emsd*"/>
+				<exclude name="*stores*"/>
+				<exclude name="*tibrvcm*"/>
+				<exclude name="*transports*"/>			
+			</fileset>
+		</copy> 
+
+    	<!-- change replace properties of tibemsd.conf -->
+    	<PropertyReplace inputprefix="${EMS_FOM_propertyprefix}" originalfile="${tibco_ems_conf}" output="${EMS_FOM_CONFIG_FILE}">
+    		<PropertyMapping key="listen" value="listen_ssl"/>
+    	</PropertyReplace>
+		
+		<!-- concat addons properties -->
+		<concat destfile="${EMS_FOM_CONFIG_FILE}" append="true">
+			<fileset file="${templates.dir}/ems/tibemsd.conf" />			
+		</concat>
+   		
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${EMS_FOM_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<var name="emsInit" value="${tmpDir}/initEMS${EMS_FOM_server}.txt"/>
+    	<copy tofile="${emsInit}" file="${templates.dir}/ems/initEMSFOM.txt" overwrite="true"> 
+    		<filterset refid="filters.domains"/>
+    		<filterset refid="filters.ems"/>
+    		<filterset refid="filters.ems.fom"/>
+			<filterset refid="filters.soft"/>			
+    	</copy> 
+    	
+		<!-- replace stores --> 
+		<echo message="copying stores.conf"/>
+		<copy file="${templates.dir}/ems/stores.conf" todir="${EMS_FOM_shared_config}" overwrite="true"> 
+			<filterset refid="filters.ems.fom"/>
+		</copy>
+		
+		
+		<!-- Register --> 
+		<if>
+			<isset property="isWindows"/>
+			<then>
+				<registerEMS port="${EMS_FOM_PortNumber}" configFile="${EMS_FOM_CONFIG_FILE}"/>    		
+			</then>
+		</if>
+
+		<!-- initEMS  -->    	
+		<initEMS 
+			configDir="${EMS_FOM_CONFIG_DIR}" 
+			configFile="${EMS_FOM_CONFIG_FILE}" 
+			serverAdress="${EMS_FOM_address}" 
+			port="${EMS_FOM_PortNumber}" 
+			user="${EMS_FOM_admin_user}" 
+			password="${EMS_FOM_admin_passwd}" 		
+			script="${emsInit}"/>			
+			
+	</target>	
+	
+
+	<!-- ======================================== 
+          target: _sleep
+     ========================================== -->
+   <target name="_sleep">	
+		<sleep seconds="3"/>
+   </target>	
+
+    <!-- ======================================== 
+          target: _create_ems_services_dom              
+     ========================================== -->
+   <target name="_create_ems_services_dom" depends="_loadConfig" if="doCreateDOMServerService">	
+   	
+		<!-- make start/stop -->
+    	<mkdir dir="${EXPL_SERVICES_DIR}"/>
+	
+
+    	<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${expl.os.template.dir}">
+				<include name="EMS"/>
+			</fileset>
+			<filterset refid="filters.domains"/>  
+			<filterset refid="filters.ems"/>
+			<filterset refid="filters.ems.dom"/>
+			<filterset refid="filters.exploitation"/> 
+			<mergemapper to="${EMS_unix_service}_${EMS_DOM_PortNumber}"/>
+        </copy>
+
+    		
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SERVICES_DIR}" includes="${EMS_unix_service}_${EMS_DOM_PortNumber}"/>
+		</chmod>
+
+	
+    </target>
+   
+   
+    <!-- ======================================== 
+          target: _update_ems_services_dom              
+     ========================================== -->
+   <target name="_update_ems_services_dom" depends="_loadConfig" if="doCreateDOMServerService">	
+   	
+		<if>
+			<available file="${EMS_unix_service}_${EMS_DOM_PortNumber}"/>
+			<then>
+				<!-- make start/stop -->
+				<mkdir dir="${EXPL_SERVICES_DIR}"/>
+			
+				<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+					<fileset dir="${expl.os.template.dir}">
+						<include name="EMS"/>
+					</fileset>
+					<filterset refid="filters.domains"/>  
+					<filterset refid="filters.ems"/>
+					<filterset refid="filters.ems.dom"/>
+					<filterset refid="filters.exploitation"/> 
+					<mergemapper to="${EMS_unix_service}_${EMS_DOM_PortNumber}"/>
+				</copy>
+
+					
+				<chmod perm="ug+x">
+					<fileset dir="${EXPL_SERVICES_DIR}" includes="${EMS_unix_service}_${EMS_DOM_PortNumber}"/>
+				</chmod>
+			</then>
+		</if>
+    </target>
+
+    <!-- ========================================
+          target: _create_ems_services_app"              
+     ========================================= -->
+   <target name="_create_ems_services_app" depends="_loadConfig" if="doCreateAPPServerService">	
+   	
+		<!-- make start/stop -->
+    	<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+    	<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${expl.os.template.dir}">
+				<include name="EMS"/>
+			</fileset>
+			<filterset refid="filters.domains"/>  
+			<filterset refid="filters.ems"/>
+			<filterset refid="filters.ems.app"/>
+			<filterset refid="filters.exploitation"/> 
+			<mergemapper to="${EMS_unix_service}_${EMS_APP_PortNumber}"/>
+        </copy>
+
+    		
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SERVICES_DIR}" includes="${EMS_unix_service}_${EMS_APP_PortNumber}"/>
+		</chmod>
+		
+    </target>
+	
+	
+	<!-- ========================================
+          target: _update_ems_services_app"              
+     ========================================= -->
+   <target name="_update_ems_services_app" depends="_loadConfig" if="doCreateAPPServerService">	
+   	
+		<if>
+			<available file="${EMS_unix_service}_${EMS_APP_PortNumber}"/>
+			<then>
+				<!-- make start/stop -->
+				<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+				<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+					<fileset dir="${expl.os.template.dir}">
+						<include name="EMS"/>
+					</fileset>
+					<filterset refid="filters.domains"/>  
+					<filterset refid="filters.ems"/>
+					<filterset refid="filters.ems.app"/>
+					<filterset refid="filters.exploitation"/> 
+					<mergemapper to="${EMS_unix_service}_${EMS_APP_PortNumber}"/>
+				</copy>
+					
+				<chmod perm="ug+x">
+					<fileset dir="${EXPL_SERVICES_DIR}" includes="${EMS_unix_service}_${EMS_APP_PortNumber}"/>
+				</chmod>
+			</then>
+		</if>
+    </target>
+	
+	
+	 <!-- ======================================== 
+          target: _create_ems_services_fom              
+     ========================================== -->
+   <target name="_create_ems_services_fom" depends="_loadConfig" if="doCreateFOMServerService">	
+   	
+		<!-- make start/stop -->
+    	<mkdir dir="${EXPL_SERVICES_DIR}"/>
+	
+    	<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${expl.os.template.dir}">
+				<include name="EMS"/>
+			</fileset>
+			<filterset refid="filters.domains"/>  
+			<filterset refid="filters.ems"/>
+			<filterset refid="filters.ems.fom"/>
+			<filterset refid="filters.exploitation"/> 
+			<mergemapper to="${EMS_unix_service}_${EMS_FOM_PortNumber}"/>
+        </copy>
+    		
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SERVICES_DIR}" includes="${EMS_unix_service}_${EMS_FOM_PortNumber}"/>
+		</chmod>
+
+	
+    </target>
+
+   <!-- ================================= 
+         target: _stop_and_delete_ems_dom             
+     ================================= -->
+    <target name="_stop_and_delete_ems_dom" depends="_loadConfig" if="doCreateDOMServer">
+
+		<!-- stop DOM -->	            	    	    	
+    	<stopEMS serverAdress="${TRA_domain_ems_adress}" port="${EMS_DOM_PortNumber}" user="${TRA_domain_ems_user}" password="${TRA_domain_ems_passwd}" failonerror="false"/>
+    	
+    	<!-- delete conf if exists  -->
+		<delete dir="${EMS_DOM_CONFIG_DIR}" failonerror="false" verbose="false" includeemptydirs="true"/> 
+	
+		<!-- unregister  -->    	
+		<if>
+			<isset property="isWindows"/>
+			<then>
+				<unregisterEMS port="${EMS_DOM_PortNumber}"/> 
+			</then>
+		</if>
+	
+		<!-- TODO check if shared  	
+		<delete dir="${EMS_DOM_store}" failonerror="false" verbose="false" includeemptydirs="true"/>    	
+		<delete dir="${EMS_DOM_shared_config}" failonerror="false" verbose="false" includeemptydirs="true"/>
+		-->
+     </target>
+
+     <!-- ================================= 
+         target: _stop_and_delete_ems_app             
+     ================================= -->
+    <target name="_stop_and_delete_ems_app" depends="_loadConfig" if="doCreateAPPServer">
+
+		<!-- stop app-->	            	
+		<stopEMS serverAdress="${EMS_address}" port="${EMS_APP_PortNumber}" user="${EMS_APP_admin_user}" password="${EMS_APP_admin_passwd}" failonerror="false"/>
+	    	    	
+    	<!-- delete conf if exists 	--> 
+    	<delete dir="${EMS_APP_CONFIG_DIR}" failonerror="false" verbose="false" includeemptydirs="true"/>
+
+		<!-- unregister  -->    	
+		<if>
+			<isset property="isWindows"/>
+			<then>
+				<unregisterEMS port="${EMS_APP_PortNumber}"/> 
+			</then>
+		</if>
+	
+		<!-- TODO check if shared
+		<delete dir="${EMS_APP_store}" failonerror="false" verbose="false" includeemptydirs="true"/>    	
+		<delete dir="${EMS_APP_shared_config}" failonerror="false" verbose="false" includeemptydirs="true"/>
+		-->
+
+    </target>
+	
+	
+	<!-- ================================= 
+         target: _stop_and_delete_ems_fom             
+     ================================= -->
+    <target name="_stop_and_delete_ems_fom" depends="_loadConfig" if="doCreateFOMServer">
+
+		<!-- stop DOM -->	            	    	    	
+    	<stopEMS serverAdress="${EMS_FOM_address}" port="${EMS_FOM_PortNumber}" user="${EMS_FOM_admin_user}" password="${EMS_FOM_admin_passwd}" failonerror="false"/>
+		
+    	<!-- delete conf if exists  -->
+		<delete dir="${EMS_FOM_CONFIG_DIR}" failonerror="false" verbose="false" includeemptydirs="true"/> 
+	
+		<!-- unregister  -->    	
+		<if>
+			<isset property="isWindows"/>
+			<then>
+				<unregisterEMS port="${EMS_FOM_PortNumber}"/> 
+			</then>
+		</if>			
+     </target>
+
+    <!-- ================================= 
+         target: _delete_service_ems_dom              
+     ================================= -->
+   <target name="_delete_service_ems_dom" depends="_stop_and_delete_ems_dom" if="doCreateDOMServerService">	   		
+    	<delete failonerror="false">     	   	
+		<fileset dir="${EXPL_SERVICES_DIR}" includes="${EMS_unix_service}_${EMS_DOM_PortNumber}"/>
+	</delete>
+   </target>
+
+   <!-- ================================= 
+         target: _delete_service_ems_app              
+     ================================= -->
+   <target name="_delete_service_ems_app" depends="_stop_and_delete_ems_app" if="doCreateAPPServerService">	   		
+    	<delete failonerror="false">     	   	
+		<fileset dir="${EXPL_SERVICES_DIR}" includes="${EMS_unix_service}_${EMS_APP_PortNumber}"/>
+	</delete>
+   </target>
+   
+   
+    <!-- ================================= 
+         target: _delete_service_ems_fom              
+     ================================= -->
+   <target name="_delete_service_ems_fom" depends="_stop_and_delete_ems_fom" if="doCreateFOMServerService">	   		
+    	<delete failonerror="false">     	   	
+		<fileset dir="${EXPL_SERVICES_DIR}" includes="${EMS_unix_service}_${EMS_FOM_PortNumber}"/>
+	</delete>
+   </target>
+   
+    <!-- ================================= 
+         target: _update_ems_dom_credentials
+     ================================= -->
+   <target name="_update_ems_dom_credentials" depends="_check_template" if="doCreateDOMServer">	   		
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${EMS_DOM_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<var name="emsInit" value="${tmpDir}/updateCredentials.txt"/>
+    	<copy tofile="${emsInit}" file="${templates.dir}/ems/updateCredentials.txt" overwrite="true"> 
+    		<filterset refid="filters.domains"/>
+    		<filterset refid="filters.ems"/>
+    		<filterset refid="filters.ems.dom"/>
+    	</copy>
+		
+		<!-- updateEMS  -->    	
+		<updateEMS configDir="${EMS_DOM_CONFIG_DIR}" 
+			configFile="${EMS_DOM_CONFIG_FILE}" 
+			serverAdress="${TRA_domain_ems_adress}" 
+			port="${EMS_DOM_PortNumber}" 
+			user="${TRA_domain_ems_user}" 
+			password="${TRA_domain_ems_passwd}" 
+			passwordold="${EMS_DOM_admin_passwd_old}" 
+			script="${emsInit}"/>
+			
+		<delete dir="${tmpDir}" failonerror="false"/>
+				
+   </target>
+
+   <!-- ================================= 
+         target: _update_ems_app_credentials              
+     ================================= -->
+   <target name="_update_ems_app_credentials" depends="_check_template" if="doCreateAPPServer">	   		
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${EMS_APP_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<var name="emsInit" value="${tmpDir}/updateCredentials.txt"/>
+    	<copy tofile="${emsInit}" file="${templates.dir}/ems/updateCredentials.txt" overwrite="true"> 
+    		<filterset refid="filters.domains"/>
+    		<filterset refid="filters.ems"/>
+    		<filterset refid="filters.ems.app"/>
+    	</copy>
+		
+		<!-- updateEMS  -->    	
+		<updateEMS 
+			configDir="${EMS_APP_CONFIG_DIR}" 
+			configFile="${EMS_APP_CONFIG_FILE}" 
+			serverAdress="${EMS_address}" 
+			port="${EMS_APP_PortNumber}" 
+			user="${EMS_APP_admin_user}" 
+			password="${EMS_APP_admin_passwd}" 
+			passwordold="${EMS_APP_admin_passwd_old}" 
+			script="${emsInit}"/>
+			
+		<delete dir="${tmpDir}" failonerror="false"/>
+   </target>
+   
+    <!-- ================================= 
+         target: _register_dom_server              
+        ================================= -->
+    <target name="_register_dom_server" depends="_loadConfig" if="doCreateDOMServer">
+		<if>
+			<available file="${EMS_DOM_CONFIG_FILE}"/>
+			<then>
+				<stopEMS serverAdress="${TRA_domain_ems_adress}" port="${EMS_DOM_PortNumber}" user="${TRA_domain_ems_user}" password="${TRA_domain_ems_passwd}" failonerror="false"/>
+				<if>
+					<isset property="isWindows"/>
+					<then>
+						<unregisterEMS port="${EMS_DOM_PortNumber}"/> 
+						<registerEMS port="${EMS_DOM_PortNumber}" configFile="${EMS_DOM_CONFIG_FILE}"/> 
+					</then>
+				</if>
+				<startEMS configDir="${EMS_DOM_CONFIG_DIR}" configFile="${EMS_DOM_CONFIG_FILE}" port="${EMS_DOM_PortNumber}"/>
+			</then>
+		</if>
+	</target>
+	
+	<!-- ================================= 
+         target: _register_app_server              
+        ================================= -->
+    <target name="_register_app_server" depends="_loadConfig" if="doCreateAPPServer">
+		<if>
+			<available file="${EMS_APP_CONFIG_FILE}"/>
+			<then>
+				<stopEMS serverAdress="${EMS_address}" port="${EMS_APP_PortNumber}" user="${EMS_APP_admin_user}" password="${EMS_APP_admin_passwd}" failonerror="false"/>
+				<if>
+					<isset property="isWindows"/>
+					<then>
+						<unregisterEMS port="${EMS_APP_PortNumber}"/> 
+						<registerEMS port="${EMS_APP_PortNumber}" configFile="${EMS_APP_CONFIG_FILE}"/> 
+					</then>
+				</if>
+				<startEMS configDir="${EMS_APP_CONFIG_DIR}" configFile="${EMS_APP_CONFIG_FILE}" port="${EMS_APP_PortNumber}"/>	 
+			</then>
+		</if>				
+	</target>
+							
+								
+	 <!-- ================================= 
+         target: _register_fom_server              
+        ================================= -->
+    <target name="_register_fom_server" depends="_loadConfig" if="doCreateFOMServer">
+		<if>
+			<available file="${EMS_FOM_CONFIG_FILE}"/>
+			<then>
+				<stopEMS serverAdress="${EMS_FOM_address}" port="${EMS_FOM_PortNumber}" user="${EMS_FOM_admin_user}" password="${EMS_FOM_admin_passwd}" failonerror="false"/>
+				<if>
+					<isset property="isWindows"/>
+					<then>
+						<unregisterEMS port="${EMS_FOM_PortNumber}"/> 
+						<registerEMS port="${EMS_FOM_PortNumber}" configFile="${EMS_FOM_CONFIG_FILE}"/> 
+					</then>
+				</if>
+				<startEMS configDir="${EMS_FOM_CONFIG_DIR}" configFile="${EMS_FOM_CONFIG_FILE}" port="${EMS_FOM_PortNumber}"/>
+			</then>
+		</if>
+	</target>
+	
+    <!-- ===================================================================== -->
+    <!-- Macro initEMS			                                         	   -->
+    <!-- ===================================================================== -->
+    <macrodef name="initEMS">
+	<attribute name="configDir" />	
+	<attribute name="configFile" />
+	<attribute name="serverAdress" />
+	<attribute name="port" />	
+	<attribute name="user" />
+	<attribute name="password" />	
+	<attribute name="script" />	
+	<sequential>    
+	
+        	<!-- start  -->    	
+        	<startEMS configDir="@{configDir}" configFile="@{configFile}" port="@{port}"/>	    	
+	    		    		    	    	
+	    	<!-- Init -->    	
+	    	<var name="succeed" value="false"/>
+	    	<var name="err" unset="true"/>
+	    	<For list="1,2,3,4,5" param="tries">
+	    		<sequential>
+	    		 	<if>	 		
+	    		 		<isfalse value="${succeed}"/>
+	    		 		<then>	    		 		       
+	    				       <trycatch property="err">
+									<try>
+										<echo message="init EMS" level="info"/>
+										<if>
+											<!-- Use password if more than 2 tries -->											
+											<isGreaterThan arg1="@{tries}" arg2="2"/>											
+											<then>												 
+												<exec dir="${basedir}" executable="${EMS_admin_executable}" failonerror="true">
+													<arg line="-server @{serverAdress} -user @{user} -password @{password} -ignore -script '@{script}'"/>
+												</exec> 		 		 														
+											</then>
+											<else>									
+												<exec dir="${basedir}" executable="${EMS_admin_executable}" failonerror="true">
+													<arg line="-server @{serverAdress} -user admin -ignore -script '@{script}'"/>
+												</exec>    
+											</else>
+										</if>
+										<var name="succeed" value="true"/>    		  				
+									</try>
+									<catch>										
+										<sleep seconds="3"/>
+									</catch>
+								</trycatch>	 		
+							</then>
+						</if>
+				</sequential>
+	    	</For>
+			
+			<if>
+				<not>
+					<equals arg1="${succeed}" arg2="true" casesensitive="true" trim="false" />
+				</not>
+				<then>
+					<fail message="Unable to initialize EMS, reason : ${err}"/>
+				</then>
+			</if>
+			
+        </sequential>
+     </macrodef>
+	 
+	  <!-- ===================================================================== -->
+    <!-- Macro updateEMS			                                         	   -->
+    <!-- ===================================================================== -->
+    <macrodef name="updateEMS">
+	<attribute name="configDir" />	
+	<attribute name="configFile" />
+	<attribute name="serverAdress" />
+	<attribute name="port" />	
+	<attribute name="user" />
+	<attribute name="password" />
+	<attribute name="passwordold" />
+	<attribute name="script" />	
+	<sequential>    	        		    		    	    	
+	    	<!-- Init -->    	
+	    	<var name="succeed" value="false"/>
+	    	<var name="err" unset="true"/>
+	    	<For list="1,2,3,4,5" param="tries">
+	    		<sequential>
+	    		 	<if>	 		
+	    		 		<isfalse value="${succeed}"/>
+	    		 		<then>	    		 		       
+	    				       <trycatch property="err">
+									<try>
+										<echo message="init EMS" level="info"/>
+										<if>
+											<!-- Use password if more than 2 tries -->											
+											<isGreaterThan arg1="@{tries}" arg2="2"/>
+											<then>
+												  <if>																												
+														<not><equals arg1="@{passwordold}" arg2="@{password}" casesensitive="true" trim="false" /></not>
+														<then>
+															<exec dir="${basedir}" executable="${EMS_admin_executable}" failonerror="true">
+																<arg line="-server @{serverAdress} -user @{user} -password @{passwordold} -ignore -script '@{script}'"/>
+															</exec> 		 		 		
+														</then>
+														<else>
+															<exec dir="${basedir}" executable="${EMS_admin_executable}" failonerror="true">
+																<arg line="-server @{serverAdress} -user @{user} -password @{password} -ignore -script '@{script}'"/>
+															</exec> 		 		 		
+														</else>
+												  </if>												  
+											</then>
+											<else>									
+												<exec dir="${basedir}" executable="${EMS_admin_executable}" failonerror="true">
+													<arg line="-server @{serverAdress} -user @{user} -password @{password} -ignore -script '@{script}'"/>
+												</exec>   
+											</else>
+										</if>
+										<var name="succeed" value="true"/>    		  				
+									</try>
+									<catch>										
+										<sleep seconds="3"/>
+									</catch>
+								</trycatch>	 		
+							</then>
+						</if>
+				</sequential>
+	    	</For>
+			
+			<if>
+				<not>
+					<equals arg1="${succeed}" arg2="true" casesensitive="true" trim="false" />
+				</not>
+				<then>
+					<fail message="Unable to update EMS, reason : ${err}"/>
+				</then>
+			</if>
+        </sequential>
+     </macrodef>
+    	
+      	
+    <!-- ===================================================================== -->
+    <!-- Macro registerEMS			                                         	   -->
+    <!-- ===================================================================== -->
+    <macrodef name="registerEMS">
+	<attribute name="port" />	
+	<attribute name="configFile" />
+        <sequential>   
+        	<var name="tibco_ems_svc_converted" unset="true"/>
+        	<var name="tibco_ems_bin_converted" unset="true"/>
+        	<var name="config.converted" unset="true"/>
+        	
+        	<pathconvert property="tibco_ems_svc_converted" targetos="windows">
+				<path location="${tibco_ems_svc}" />
+			</pathconvert>
+			<pathconvert property="tibco_ems_bin_converted" targetos="windows">
+				<path location="${tibco_ems_bin}" />
+			</pathconvert>
+		
+			<pathconvert property="config.converted" targetos="windows">
+				<path location="@{configFile}" />
+			</pathconvert>
+			
+			<echo message="register EMS : ${tibco_ems_svc_converted}" level="info"/>
+			<exec dir="${tibco_ems_bin_converted}" executable="${tibco_ems_svc_converted}" failonerror="true">
+				  <arg line="/i ${EMS_windows_service} '${tibco_ems_bin_converted}' '${tibco_ems_bin_converted}' '-config ${config.converted}' @{port}"/>
+			</exec>     		
+        </sequential>
+    </macrodef>	 
+	
+    <!-- ===================================================================== -->
+    <!-- Macro unregisterEMS			                                         	   -->
+    <!-- ===================================================================== -->
+    <macrodef name="unregisterEMS">
+	<attribute name="port" />		
+        <sequential>   
+        	<var name="tibco_ems_svc_converted" unset="true"/>
+        	<var name="tibco_ems_bin_converted" unset="true"/>
+        	
+        	<pathconvert property="tibco_ems_svc_converted" targetos="windows">
+				<path location="${tibco_ems_svc}" />
+			</pathconvert>
+			<pathconvert property="tibco_ems_bin_converted" targetos="windows">
+				<path location="${tibco_ems_bin}" />
+			</pathconvert>
+				
+			<echo message="unregister EMS : ${tibco_ems_svc_converted}" level="info"/>
+			<exec dir="${tibco_ems_bin_converted}" executable="${tibco_ems_svc_converted}" failonerror="true">
+				  <arg line="/r ${EMS_windows_service} @{port}"/>
+			</exec>     		
+        </sequential>
+    </macrodef>		
+	
+</project>

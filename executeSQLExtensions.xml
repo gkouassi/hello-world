@@ -1,0 +1,2125 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!-- ====================================================================== 
+     22 févr. 07 10:48:43                                                        
+
+     project  : SOFTInstalller
+     description : execution SQL des extensions
+                   
+     fxbrun                                                                
+     ====================================================================== -->
+<project name="SOFTInstalller" default="createSQL_All" basedir="..">    	
+		
+	 <!-- include task definition -->
+	 <import file="${basedir}/common/taskdef-scripts.xml"/>
+
+	 <!-- include install definition -->
+	 <import file="${basedir}/common/scripts_definition.xml"/>
+
+     <!-- include filter definition -->
+     <import file="${basedir}/common/filters.xml"/>
+	 
+	 <!-- ================================= 
+			Create DB Users
+      ================================= -->
+     <target name="createDatabaseUsers" depends="_create-db"/> 
+        
+	<!-- ================================= 
+			Drop DB users
+      ================================= -->
+     <target name="dropDabaseUsers" depends="dropSQL_All,_drop-db_users"/> 
+      					   
+     <!-- ================================= 
+			Create All
+      ================================= -->
+     <target name="createSQL_All" depends="_dropSQL_SOFTMonitor,_dropSQL_TIBCO,_createSQL_SOFTMonitor,_createSQL_TIBCO"/> 
+               
+      <!-- ================================= 
+			drop All
+	 ================================= -->
+      <target name="dropSQL_All" depends="_dropSQL_SOFTMonitor,_dropSQL_TIBCO"/> 
+	  
+	 <!-- ================================= 
+			create TIBCO Only
+      ================================= -->
+     <target name="createSQL_TIBCO" depends="_createSQL_TIBCO"/> 
+      
+	   <!-- ================================= 
+			drop TIBCO BW6
+      ================================= -->
+     <target name="dropSQL_TIBCOBW6" depends="_dropSQL_TIBCOBW6"/> 
+     
+	 <!-- ================================= 
+			create TIBCO BW6
+      ================================= -->
+     <target name="createORA11gSQL_TIBCOBW6" depends="_createORA11gSQL_TIBCOBW6"/>      
+	  
+	   <!-- ================================= 
+			create SOFTMonitor Only
+      ================================= -->
+     <target name="createSQL_SOFTMonitor" depends="_createSQL_SOFTMonitor"/> 
+	 
+	  <!-- ================================= 
+			update TIBCO Only
+      ================================= -->
+     <target name="updateSQL_TIBCO" depends="_dropSQL_TIBCO,_createSQL_TIBCO"/> 
+      
+	   <!-- ================================= 
+			update SOFTMonitor Only
+      ================================= -->
+     <target name="updateSQL_SOFTMonitor" depends="_dropSQL_SOFTMonitor,_createSQL_SOFTMonitor"/> 
+     
+	 
+     <!-- ================================= 
+          target: _loadConfigInit              
+        ================================= -->
+    <target name="_loadConfigInit" depends="_loadEnvironement">
+    	
+		<!--  used unlocked drivers  -->
+		<if>
+			<contains string="${TIBCO_datasource_driver}" substring="tibcosoftwareinc" casesensitive="false"/>
+			<then>
+				<var name="TIBCO_datasource_driver" value="fr.squareit.soft.jdbc.driver.TibcoUnlockDriver"/>
+			</then>
+		</if>
+		
+		<if>
+			<contains string="${SOFTMonitor_datasource_driver}" substring="tibcosoftwareinc" casesensitive="false"/>
+			<then>
+				<var name="SOFTMonitor_datasource_driver" value="fr.squareit.soft.jdbc.driver.TibcoUnlockDriver"/>
+			</then>
+		</if>
+		
+		<if>
+			<contains string="${MFT_datasource_driver}" substring="tibcosoftwareinc" casesensitive="false"/>
+			<then>
+				<var name="MFT_datasource_driver" value="fr.squareit.soft.jdbc.driver.TibcoUnlockDriver"/>
+			</then>
+		</if>
+		
+		<if>
+			<contains string="${BC_datasource_driver}" substring="tibcosoftwareinc" casesensitive="false"/>
+			<then>
+				<var name="BC_datasource_driver" value="fr.squareit.soft.jdbc.driver.TibcoUnlockDriver"/>
+			</then>
+		</if>
+    	
+    	<if>
+    		<contains string="${BWPM_datasource_driver}" substring="tibcosoftwareinc" casesensitive="false"/>
+    		<then>
+    			<var name="BWPM_datasource_driver" value="fr.squareit.soft.jdbc.driver.TibcoUnlockDriver"/>
+    		</then>
+    	</if>
+				
+												
+		<!-- load driver -->
+		<path id="sql.classpath">			
+			<fileset dir="${scripts.jdbc.driver.path}">
+				<include name="*.jar" />
+			</fileset>	
+			<path refid="install.script.classpath"/>			
+		</path>	
+		
+		<!-- dbmaintain -->
+		<taskdef name="updateDatabase" classname="org.dbmaintain.launch.ant.UpdateDatabaseAntTask" classpathref="install.script.classpath" loaderRef="sql"/>
+		<taskdef name="createScriptArchive" classname="org.dbmaintain.launch.ant.CreateScriptArchiveAntTask" classpathref="install.script.classpath" loaderRef="sql"/>
+		
+				
+		<!-- Extract DBname for MSSQL-->	 
+		<if>
+			<contains string="${TIBCO_datasource_url}" substring="sqlserver" casesensitive="false"/>
+			<then>
+				<propertyregex property="TIBCO_mssql_datasource_instance"
+						  input="${TIBCO_datasource_url}"
+						  regexp="\.*DatabaseName=(.*)"
+						  select="\1"
+						  casesensitive="false" 
+						  override="true"/>
+				<echo message="TIBCO MSSQL DataSource instance is : ${TIBCO_mssql_datasource_instance}" level="info"/>
+			</then>
+			<else>
+				<var name="TIBCO_mssql_datasource_instance" unset="true"/>
+			</else>
+		</if>		
+				
+		<if>
+			<contains string="${SOFTMonitor_datasource_url}" substring="sqlserver" casesensitive="false"/>
+			<then>
+				<propertyregex property="SOFTMonitor_mssql_datasource_instance"
+						  input="${SOFTMonitor_datasource_url}"
+						  regexp="\.*DatabaseName=(.*)"
+						  select="\1"
+						  casesensitive="false" 
+						  override="true"/>
+				<echo message="SOFTMonitor MSSQL Data source instance is : ${SOFTMonitor_mssql_datasource_instance}" level="info"/>
+			</then>
+			<else>
+				<var name="SOFTMonitor_mssql_datasource_instance" unset="true"/>
+			</else>
+		</if>			
+				
+		<if>
+			<contains string="${MFT_datasource_url}" substring="sqlserver" casesensitive="false"/>
+			<then>
+				<propertyregex property="MFT_mssql_datasource_instance"
+						  input="${MFT_datasource_url}"
+						  regexp="\.*DatabaseName=(.*)"
+						  select="\1"
+						  casesensitive="false" 
+						  override="true"/>
+				<echo message="MFT MSSQL Data source instance is : ${MFT_mssql_datasource_instance}" level="info"/>
+			</then>
+			<else>
+				<var name="MFT_mssql_datasource_instance" unset="true"/>
+			</else>
+		</if>	
+							
+		<if>
+			<contains string="${BC_datasource_url}" substring="sqlserver" casesensitive="false"/>
+			<then>
+				<propertyregex property="BC_mssql_datasource_instance"
+						  input="${BC_datasource_url}"
+						  regexp="\.*DatabaseName=(.*)"
+						  select="\1"
+						  casesensitive="false" 
+						  override="true"/>
+				<echo message="BC MSSQL Data source instance is : ${BC_mssql_datasource_instance}" level="info"/>
+			</then>
+			<else>
+				<var name="BC_mssql_datasource_instance" unset="true"/>
+			</else>
+		</if>	
+		    	
+    	<if>
+			<contains string="${BWPM_datasource_url}" substring="sqlserver" casesensitive="false"/>
+			<then>
+				<propertyregex property="BWPM_mssql_datasource_instance"
+						  input="${BWPM_datasource_url}"
+						  regexp="\.*DatabaseName=(.*)"
+						  select="\1"
+						  casesensitive="false" 
+						  override="true"/>
+				<echo message="BWPM MSSQL Data source instance is : ${BWPM_mssql_datasource_instance}" level="info"/>
+			</then>
+			<else>
+				<var name="BWPM_mssql_datasource_instance" unset="true"/>
+			</else>
+		</if>
+		
+		<!-- Extract DBname for MYSQL-->	 
+		<if>
+			<contains string="${TIBCO_datasource_url}" substring="mysql" casesensitive="false"/>
+			<then>
+				<propertyregex property="TIBCO_mysql_datasource_instance"
+						  input="${TIBCO_datasource_url}"
+						  regexp="jdbc:mysql://.*/([^\\?]*)"
+						  select="\1"
+						  casesensitive="false" 
+						  override="true"/>
+				<echo message="TIBCO MYSQL DataSource instance is : ${TIBCO_mysql_datasource_instance}" level="info"/>
+			</then>
+			<else>
+				<var name="TIBCO_mysql_datasource_instance" unset="true"/>
+			</else>
+		</if>		
+				
+		<if>
+			<contains string="${SOFTMonitor_datasource_url}" substring="mysql" casesensitive="false"/>
+			<then>
+				<propertyregex property="SOFTMonitor_mysql_datasource_instance"
+						  input="${SOFTMonitor_datasource_url}"
+						  regexp="jdbc:mysql://.*/([^\\?]*)"
+						  select="\1"
+						  casesensitive="false" 
+						  override="true"/>
+				<echo message="SOFTMonitor MYSQL Data source instance is : ${SOFTMonitor_mysql_datasource_instance}" level="info"/>
+			</then>
+			<else>
+				<var name="SOFTMonitor_mysql_datasource_instance" unset="true"/>
+			</else>
+		</if>	
+		
+		
+		<!-- create tmp file -->
+		<tempfile property="validate.sql" prefix="script" suffix=".sql" destDir="${java.io.tmpdir}"/>				
+		
+		<!-- Check -->
+		<condition property="deploy.tibco.extension">		
+			<and>
+				<length string="${TIBCO_datasource_driver}" trim="true" when="greater" length="0" />
+				<length string="${TIBCO_datasource_url}" trim="true" when="greater" length="0" />
+				<length string="${TIBCO_datasource_username}" trim="true" when="greater" length="0" />
+				<length string="${TIBCO_datasource_password}" trim="true" when="greater" length="0" />	
+				<available file="${scripts.sql.extensions.tibco.create}" type="file"/>					
+			</and>
+		</condition>
+		
+		<!-- Check BW6 -->
+		<condition property="tibco.bw6.db">		
+			<and>
+				<length string="${TIBCO_datasource_driver}" trim="true" when="greater" length="0" />
+				<length string="${TIBCO_datasource_url}" trim="true" when="greater" length="0" />
+				<length string="${TIBCO_datasource_username}" trim="true" when="greater" length="0" />
+				<length string="${TIBCO_datasource_password}" trim="true" when="greater" length="0" />	
+				<isset property="TIBCO_BW_DIR"/>
+				<available file="${TIBCO_BW_DIR}" type="dir"/>	
+				<available file="${scripts.sql.tibco.bw6.location}" type="dir"/>									
+			</and>
+		</condition>
+		
+		<!-- Check ora BW6 -->
+		<condition property="tibco.bw6.ora.db">
+			<and>
+				<isset property="tibco.bw6.db"/>
+				<contains string="${TIBCO_datasource_url}" substring="oracle" casesensitive="false"/>
+				<available file="${scripts.sql.tibco.bw6.ora11g.create}" type="file"/>		
+			</and>
+		</condition>	
+		
+		<!-- Check -->
+		<condition property="deploy.soft.extension">		
+			<and>
+				<length string="${SOFTMonitor_datasource_driver}" trim="true" when="greater" length="0" />
+				<length string="${SOFTMonitor_datasource_url}" trim="true" when="greater" length="0" />
+				<length string="${SOFTMonitor_datasource_username}" trim="true" when="greater" length="0" />
+				<length string="${SOFTMonitor_datasource_password}" trim="true" when="greater" length="0" />	
+				<available file="${scripts.sql.extensions.soft.create}" type="file"/>				
+			</and>
+		</condition>
+		
+    </target>
+	
+	<!-- ================================= 
+        target: loadConfig              
+     ================================= -->
+    <target name="_loadConfig" depends="_loadConfigInit,define_filters"/> 
+		
+	   
+	<!-- ================================= 
+          target: _createSQL_SOFTMonitor              
+        ================================= -->
+    <target name="_createSQL_SOFTMonitor" depends="_loadConfig" if="deploy.soft.extension">    			
+					
+		<!-- check script -->
+		<if>
+			<not><available file="${scripts.sql.extensions.soft.create}" type="file"/></not>
+			<then>
+				<fail message="ERREUR: le fichier ${scripts.sql.extensions.soft.create} est introuvable"/>
+			</then>
+		</if>
+		
+		<!-- generate script -->
+		<var name="tmp.create.script.location" unset="true"/>
+		<tempfile property="tmp.create.script.location" prefix="script" suffix=".sql" destDir="${java.io.tmpdir}"/>	
+		<copy file="${scripts.sql.extensions.soft.create}" tofile="${tmp.create.script.location}">
+				<filterchain refid="dbscript.filters"/>
+		</copy>
+		
+		<!-- execute -->
+		<trycatch>
+			<try>
+				<sql driver="${SOFTMonitor_datasource_driver}"
+					 url="${SOFTMonitor_datasource_url}"
+					 userid="${SOFTMonitor_datasource_username}"
+					 password="${SOFTMonitor_datasource_password}"
+					 src="${tmp.create.script.location}"
+					 classpathref="sql.classpath"
+					 autocommit="true"
+					 onerror="continue"
+				/>
+			</try>
+			<finally>
+				<!-- delete on exit -->
+				<delete file="${tmp.create.script.location}" failonerror="false" deleteonexit="true"/>
+			</finally>
+		</trycatch>						
+    </target>	
+	
+	<!-- ================================= 
+          target: _createSQL_TIBCO       
+        ================================= -->
+    <target name="_createSQL_TIBCO" depends="_loadConfig" if="deploy.tibco.extension">    			
+					
+		<!-- check script -->
+		<if>
+			<not><available file="${scripts.sql.extensions.tibco.create}" type="file"/></not>
+			<then>
+				<fail message="ERREUR: le fichier ${scripts.sql.extensions.tibco.create} est introuvable"/>
+			</then>
+		</if>	
+		
+		<!-- generate script -->
+		<var name="tmp.create.script.location" unset="true"/>
+		<tempfile property="tmp.create.script.location" prefix="script" suffix=".sql" destDir="${java.io.tmpdir}"/>	
+		<copy file="${scripts.sql.extensions.tibco.create}" tofile="${tmp.create.script.location}">
+				<filterchain refid="dbscript.filters"/>
+		</copy>
+		
+		<!-- execute -->
+		<trycatch>
+			<try>
+				<sql driver="${TIBCO_datasource_driver}"
+					 url="${TIBCO_datasource_url}"
+					 userid="${TIBCO_datasource_username}"
+					 password="${TIBCO_datasource_password}"
+					 src="${tmp.create.script.location}"
+					 classpathref="sql.classpath"
+					 autocommit="true"
+					 onerror="continue"
+				/>
+			</try>
+			<finally>
+				<!-- delete on exit -->
+				<delete file="${tmp.create.script.location}" failonerror="false" deleteonexit="true"/>
+			</finally>
+		</trycatch>						
+    </target>	
+   
+   <!-- ================================= 
+          target: _dropSQL_SOFTMonitor              
+        ================================= -->
+    <target name="_dropSQL_SOFTMonitor" depends="_loadConfig" if="deploy.soft.extension">    			
+					
+		<!-- check script -->
+		<if>
+			<not><available file="${scripts.sql.extensions.soft.drop}" type="file"/></not>
+			<then>
+				<fail message="ERREUR: le fichier ${scripts.sql.extensions.soft.drop} est introuvable"/>
+			</then>
+		</if>
+		
+		<!-- generate script -->
+		<var name="tmp.create.script.location" unset="true"/>
+		<tempfile property="tmp.create.script.location" prefix="script" suffix=".sql" destDir="${java.io.tmpdir}"/>	
+		<copy file="${scripts.sql.extensions.soft.drop}" tofile="${tmp.create.script.location}">
+				<filterchain refid="dbscript.filters"/>
+		</copy>
+		
+		<!-- execute -->
+		<trycatch property="drop.sql.soft">
+			<try>
+				<sql driver="${SOFTMonitor_datasource_driver}"
+					 url="${SOFTMonitor_datasource_url}"
+					 userid="${SOFTMonitor_datasource_username}"
+					 password="${SOFTMonitor_datasource_password}"
+					 src="${tmp.create.script.location}"
+					 classpathref="sql.classpath"
+					 autocommit="true"
+					 onerror="continue"
+				/>
+			</try>
+			<catch>
+				<echo message="error occured ${drop.sql.soft}" level="warning"/>
+			</catch>
+			<finally>
+				<!-- delete on exit -->
+				<delete file="${tmp.create.script.location}" failonerror="false" deleteonexit="true"/>
+			</finally>
+		</trycatch>						
+    </target>	
+	
+	<!-- ================================= 
+          target: _dropSQL_TIBCO       
+        ================================= -->
+    <target name="_dropSQL_TIBCO" depends="_loadConfig" if="deploy.tibco.extension">    			
+					
+		<!-- check script -->
+		<if>
+			<not><available file="${scripts.sql.extensions.tibco.drop}" type="file"/></not>
+			<then>
+				<fail message="ERREUR: le fichier ${scripts.sql.extensions.tibco.drop} est introuvable"/>
+			</then>
+		</if>	
+		
+		<!-- generate script -->
+		<var name="tmp.create.script.location" unset="true"/>
+		<tempfile property="tmp.create.script.location" prefix="script" suffix=".sql" destDir="${java.io.tmpdir}"/>	
+		<copy file="${scripts.sql.extensions.tibco.drop}" tofile="${tmp.create.script.location}">
+				<filterchain refid="dbscript.filters"/>
+		</copy>
+		
+		<!-- execute -->
+		<trycatch property="drop.sql.tibco">
+			<try>
+				<sql driver="${TIBCO_datasource_driver}"
+					 url="${TIBCO_datasource_url}"
+					 userid="${TIBCO_datasource_username}"
+					 password="${TIBCO_datasource_password}"
+					 src="${tmp.create.script.location}"
+					 classpathref="sql.classpath"
+					 autocommit="true"
+					 onerror="continue"
+				/>
+			</try>
+			<catch>
+				<echo message="error occured ${drop.sql.tibco}" level="warning"/>
+			</catch>
+			<finally>
+				<!-- delete on exit -->
+				<delete file="${tmp.create.script.location}" failonerror="false" deleteonexit="true"/>
+			</finally>
+		</trycatch>						
+    </target>
+
+	
+	<!-- ================================= 
+          target: _dropSQL_TIBCOBW6       
+        ================================= -->
+    <target name="_dropSQL_TIBCOBW6" depends="_loadConfig" if="tibco.bw6.db">    			
+					
+		<!-- check script -->
+		<if>
+			<not><available file="${scripts.sql.tibco.bw6.drop}" type="file"/></not>
+			<then>
+				<fail message="ERREUR: le fichier ${scripts.sql.tibco.bw6.drop} est introuvable"/>
+			</then>
+		</if>	
+			
+		<!-- execute -->
+		<echo message="Executing ${scripts.sql.tibco.bw6.drop}" level="info"/>
+		<trycatch property="drop.sql.tibco.bw6">
+			<try>
+				<sql driver="${TIBCO_datasource_driver}"
+					 url="${TIBCO_datasource_url}"
+					 userid="${TIBCO_datasource_username}"
+					 password="${TIBCO_datasource_password}"
+					 src="${scripts.sql.tibco.bw6.drop}"
+					 classpathref="sql.classpath"
+					 autocommit="true"
+					 onerror="continue"
+				/>
+			</try>
+			<catch>
+				<echo message="error occured ${drop.sql.tibco.bw6}" level="warning"/>
+			</catch>			
+		</trycatch>						
+    </target>
+	
+	
+	<!-- ================================= 
+          target: _createORA11gSQL_TIBCOBW6       
+        ================================= -->
+    <target name="_createORA11gSQL_TIBCOBW6" depends="_loadConfig" if="tibco.bw6.ora.db">    			
+					
+		<!-- check script -->
+		<if>
+			<not><available file="${scripts.sql.tibco.bw6.ora11g.create}" type="file"/></not>
+			<then>
+				<fail message="ERREUR: le fichier ${scripts.sql.tibco.bw6.ora11g.create} est introuvable"/>
+			</then>
+		</if>	
+						
+		<!-- create script archive -->				
+		<var name="tmp.create.script.location" unset="true"/>
+		<tempfile property="tmp.create.script.location" prefix="script" destDir="${java.io.tmpdir}"/>	
+		<mkdir dir="tmp.create.script.location"/>
+		<copy todir="${tmp.create.script.location}">
+			<fileset dir="${scripts.sql.tibco.bw6.location}"/>
+			 <chainedmapper>
+				<filtermapper>
+					<replacestring from="_" to=""/>
+				</filtermapper>
+				<globmapper from="*" to="#*"/>
+			 </chainedmapper>
+		</copy>
+		<mkdir dir="${basedir}/lib/dbmaintain"/>
+		<createScriptArchive qualifiers="oracle11gcreate,oraclecreate,oracledrop" archiveFileName="${basedir}/lib/dbmaintain/${TIBCO_datasource_type}.jar" scriptLocations="${tmp.create.script.location}"/>
+		 
+		<!-- execute -->
+		<echo message="Executing ${scripts.sql.tibco.bw6.ora11g.create}" level="info"/>
+		<trycatch property="create.sql.tibco.bw6.ora11g">
+			<try>
+				<sql driver="${TIBCO_datasource_driver}"
+					 url="${TIBCO_datasource_url}"
+					 userid="${TIBCO_datasource_username}"
+					 password="${TIBCO_datasource_password}"
+					 classpathref="sql.classpath"
+					 autocommit="true"
+					 onerror="continue">
+					<transaction>
+						drop table COMMANDHISTORY;
+						drop sequence COMMANDH_SEQ;
+						drop table DBMAINTAIN_SCRIPTS cascade constraints;
+					</transaction>												
+				</sql>									 
+				<updateDatabase scriptLocations="${basedir}/lib/dbmaintain/${TIBCO_datasource_type}.jar" 
+								autoCreateDbMaintainScriptsTable="true" 
+								qualifiers="oracle11gcreate,oraclecreate,oracledrop" 
+								includedQualifiers="oracle11gcreate">								
+					<database driverClassName="${TIBCO_datasource_driver}" 
+							  userName="${TIBCO_datasource_username}" 
+							  password="${TIBCO_datasource_password}" 
+							  url="${TIBCO_datasource_url}" 
+							  schemaNames="${TIBCO_datasource_username}"/>
+				</updateDatabase>					
+			</try>
+			<catch>
+				<echo message="error occured ${create.sql.tibco.bw6.ora11g}" level="warning"/>
+			</catch>
+			<finally>
+				<!-- delete on exit -->
+				<delete dir="${tmp.create.script.location}" failonerror="false"/>						
+			</finally>			
+		</trycatch>						
+    </target>
+	
+	 <!-- =================================   
+		target : _create-db
+    ================================= -->	
+	<target name="_create-db" depends="_create-oracle-tibco-user,_create-oracle-soft-user,_create-oracle-mft-user,_create-oracle-bc-user,_create-oracle-bwpm-user,_create-sqlserver-tibco-user,_create-sqlserver-soft-user,_create-sqlserver-mft-user,_create-sqlserver-bc-user,_create-sqlserver-bwpm-user,_create-mysql-tibco-user,_create-mysql-soft-user"/>	
+	
+	<!-- =================================   
+		target : _drop-db_users
+    ================================= -->
+	<target name="_drop-db_users" depends="_drop-oracle-tibco-users,_drop-oracle-soft-users,_drop-oracle-mft-users,_drop-oracle-bc-users,_drop-oracle-bwpm-users,_drop-sqlserver-tibco-user,_drop-sqlserver-soft-user,_drop-sqlserver-mft-user,_drop-sqlserver-bc-user,_drop-sqlserver-bwpm-user,_drop-mysql-tibco-user,_drop-mysql-soft-user"/>	
+	
+   <!-- =================================  
+		target : _check-tibco-db
+    ================================= -->
+   <target name="_check-tibco-db" depends="_loadConfig">
+
+		<echo>Checking TIBCO db type ${TIBCO_datasource_type}</echo>					  		
+		
+		<!-- oracle -->
+		<condition property="create-oracle-tibco-user">
+			<and>
+				<contains string="${TIBCO_datasource_url}" substring="oracle" casesensitive="false"/>
+				<isset property="TIBCO_datasource_adminuser"/>
+				<isset property="TIBCO_datasource_adminpassword"/>
+			</and>
+		</condition>		
+		<condition property="drop-oracle-tibco-user">
+			<and>				
+				<isset property="create-oracle-tibco-user"/>										
+			</and>
+		</condition>		
+		<condition property="create-oracle-tibco-db">
+			<and>				
+				<isset property="create-oracle-tibco-user"/>
+				<isset property="TIBCO_datasource_tslocation"/>								
+			</and>
+		</condition>
+		
+		<!-- sqlserver -->
+		<condition property="create-sqlserver-tibco-user">
+			<and>
+				<isset property="TIBCO_mssql_datasource_instance"/>
+				<isset property="TIBCO_datasource_adminuser"/>
+				<isset property="TIBCO_datasource_adminpassword"/>
+				<isset property="TIBCO_datasource_adminurl"/>				
+			</and>
+		</condition>				
+		<condition property="drop-sqlserver-tibco-user">
+			<and>				
+				<isset property="create-sqlserver-tibco-user"/>										
+			</and>
+		</condition>		
+		<condition property="create-sqlserver-tibco-db">
+			<and>				
+				<isset property="create-sqlserver-tibco-user"/>				
+				<isset property="TIBCO_datasource_tslocation"/>
+			</and>
+		</condition>
+		
+		<!-- mysql -->
+		<condition property="create-mysql-tibco-user">
+			<and>
+				<contains string="${TIBCO_datasource_url}" substring="mysql" casesensitive="false"/>
+				<isset property="TIBCO_mysql_datasource_instance"/>
+				<isset property="TIBCO_datasource_adminuser"/>
+				<isset property="TIBCO_datasource_adminpassword"/>
+				<isset property="TIBCO_datasource_adminurl"/>
+			</and>
+		</condition>				
+		<condition property="drop-mysql-tibco-user">
+			<and>				
+				<isset property="create-mysql-tibco-user"/>										
+			</and>
+		</condition>		
+		<condition property="create-mysql-tibco-db">
+			<and>				
+				<isset property="create-mysql-tibco-user"/>				
+			</and>
+		</condition>
+				
+		<!-- Check if user exists -->
+		<if>
+			<isset property="create-sqlserver-tibco-user"/>	
+			<then>
+				<echo message="select 1" file="${validate.sql}" append="false"/>
+			</then>
+		</if>
+		<if>			
+			<isset property="create-oracle-tibco-user"/>
+			<then>
+				<echo message="select 1 from dual" file="${validate.sql}" append="false"/>
+			</then>
+		</if>
+		<if>
+			<isset property="create-mysql-tibco-user"/>
+			<then>
+				<echo message="select 1" file="${validate.sql}" append="false"/>
+			</then>			
+		</if>
+				
+		<!-- test if user/db already created -->
+		<if>
+			<or>
+				<isset property="create-oracle-tibco-user"/>
+				<isset property="create-sqlserver-tibco-user"/>	
+				<isset property="create-mysql-tibco-user"/>
+			</or>
+			<then>
+				<trycatch>
+					<try>
+						<sql driver="${TIBCO_datasource_driver}"
+							 url="${TIBCO_datasource_url}"
+							 userid="${TIBCO_datasource_username}"
+							 password="${TIBCO_datasource_password}"					
+							 classpathref="sql.classpath"
+							 src="${validate.sql}"
+						/>
+						<var name="create-oracle-tibco-user" unset="true"/>
+						<var name="create-oracle-tibco-db" unset="true"/>
+						<var name="create-sqlserver-tibco-user" unset="true"/>
+						<var name="create-sqlserver-tibco-db" unset="true"/>
+						<var name="create-mysql-tibco-user" unset="true"/>
+						<var name="create-mysql-tibco-db" unset="true"/>
+					</try>				
+					<catch>
+						<var name="drop-oracle-tibco-user" unset="true"/>
+						<var name="drop-sqlserver-tibco-user" unset="true"/>
+						<var name="drop-mysql-tibco-user" unset="true"/>
+					</catch>
+					<finally>
+						<delete file="${validate.sql}" failonerror="false" quiet="true"/>
+					</finally>			
+				</trycatch>		
+			</then>
+		</if>
+	</target>
+
+
+	<!-- ================================= 
+		target : creating oracle tibco db          
+    ================================= -->
+	<target name="_create-oracle-tibco-db" if="create-oracle-tibco-db" depends="_check-tibco-db">
+		<echo>Creating oracle tibco db</echo>		
+		<sql driver="${TIBCO_datasource_driver}"
+			 url="${TIBCO_datasource_url}"
+			 userid="${TIBCO_datasource_adminuser}"
+			 password="${TIBCO_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">
+				<transaction>
+					CREATE TABLESPACE "${TIBCO_datasource_tablespace_name}" LOGGING  DATAFILE '${TIBCO_datasource_tslocation}/${TIBCO_datasource_tablespace_name}_0.dbf' SIZE ${TIBCO_datasource_tablespace_size} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 512K;
+				</transaction>				
+				<transaction>
+					CREATE TABLESPACE "${TIBCO_datasource_indexspace_name}" LOGGING  DATAFILE '${TIBCO_datasource_tslocation}/${TIBCO_datasource_indexspace_name}_0.dbf' SIZE ${TIBCO_datasource_indexspace_size} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 64K;
+				</transaction>				
+		</sql>					
+	</target>
+
+ 	<!-- ================================= 
+		target : creating oracle tibco user          
+    ================================= -->
+	<target name="_create-oracle-tibco-user" if="create-oracle-tibco-user" depends="_create-oracle-tibco-db">
+		<echo>Creating oracle tibco db</echo>		
+		<sql driver="${TIBCO_datasource_driver}"
+			 url="${TIBCO_datasource_url}"
+			 userid="${TIBCO_datasource_adminuser}"
+			 password="${TIBCO_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true">				
+				<transaction>
+					CREATE USER ${TIBCO_datasource_username} PROFILE "DEFAULT" IDENTIFIED BY "${TIBCO_datasource_password}" TEMPORARY TABLESPACE "TEMP" ACCOUNT UNLOCK;
+					ALTER USER ${TIBCO_datasource_username} DEFAULT TABLESPACE "${TIBCO_datasource_tablespace_name}";
+				</transaction>
+				<transaction>
+					GRANT CONNECT,RESOURCE TO ${TIBCO_datasource_username};
+					GRANT CREATE MATERIALIZED VIEW TO ${TIBCO_datasource_username};
+					grant create view to ${TIBCO_datasource_username};					
+				</transaction>
+				<transaction>					
+					GRANT UNLIMITED TABLESPACE TO ${TIBCO_datasource_username};
+				</transaction>
+		</sql>					
+	</target>	
+
+	<!-- ================================= 
+		target : creating sqlserver tibco db          
+       ================================= -->
+	<target name="_create-sqlserver-tibco-db" if="create-sqlserver-tibco-db" depends="_check-tibco-db">
+		<echo>Creating sqlserver tibco db ${TIBCO_mssql_datasource_instance}</echo>
+		<sql driver="${TIBCO_datasource_driver}"
+		     url="${TIBCO_datasource_adminurl}"
+		     userid="${TIBCO_datasource_adminuser}"
+		     password="${TIBCO_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">
+			<transaction>
+				CREATE DATABASE ${TIBCO_mssql_datasource_instance} ON ( NAME = ${TIBCO_mssql_datasource_instance}_dat, FILENAME = '${TIBCO_datasource_tslocation}\${TIBCO_mssql_datasource_instance}.mdf', SIZE = ${TIBCO_datasource_dbsize}, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB ) LOG ON ( NAME = ${TIBCO_mssql_datasource_instance}_log, FILENAME = '${TIBCO_datasource_tslocation}\${TIBCO_mssql_datasource_instance}.ldf', SIZE = 5MB, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB );				
+				ALTER DATABASE ${TIBCO_mssql_datasource_instance} SET ALLOW_SNAPSHOT_ISOLATION ON;
+				ALTER DATABASE ${TIBCO_mssql_datasource_instance} SET READ_COMMITTED_SNAPSHOT ON;												
+			</transaction>			
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : creating sqlserver tibco user          
+       ================================= -->
+	<target name="_create-sqlserver-tibco-user" if="create-sqlserver-tibco-user" depends="_create-sqlserver-tibco-db">
+
+		<sql driver="${TIBCO_datasource_driver}"
+		     url="${TIBCO_datasource_adminurl}"
+		     userid="${TIBCO_datasource_adminuser}"
+		     password="${TIBCO_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				CREATE LOGIN ${TIBCO_datasource_username} WITH PASSWORD = '${TIBCO_datasource_password}', DEFAULT_DATABASE=${TIBCO_mssql_datasource_instance}, CHECK_POLICY=OFF;
+				ALTER  LOGIN ${TIBCO_datasource_username} WITH PASSWORD = '${TIBCO_datasource_password}', DEFAULT_DATABASE=${TIBCO_mssql_datasource_instance}, CHECK_POLICY=OFF;
+			</transaction>
+		</sql>
+
+		<sql driver="${TIBCO_datasource_driver}"
+		     url="${TIBCO_datasource_url}"
+		     userid="${TIBCO_datasource_adminuser}"
+		     password="${TIBCO_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>								
+				CREATE USER ${TIBCO_datasource_username} FOR LOGIN ${TIBCO_datasource_username} WITH DEFAULT_SCHEMA = ${TIBCO_datasource_username};
+				ALTER USER ${TIBCO_datasource_username} WITH LOGIN=${TIBCO_datasource_username},DEFAULT_SCHEMA = ${TIBCO_datasource_username};
+				CREATE SCHEMA ${TIBCO_datasource_username} AUTHORIZATION ${TIBCO_datasource_username};
+				ALTER AUTHORIZATION ON SCHEMA::${TIBCO_datasource_username} TO ${TIBCO_datasource_username};
+			</transaction>
+			<transaction>
+				GRANT CONNECT TO ${TIBCO_datasource_username};
+				GRANT CREATE TABLE TO ${TIBCO_datasource_username};
+				GRANT CREATE PROCEDURE TO ${TIBCO_datasource_username};
+				GRANT CREATE VIEW TO ${TIBCO_datasource_username};
+				exec sp_addrolemember 'db_owner', ${TIBCO_datasource_username};
+			</transaction>
+		</sql>
+	</target>
+	
+	
+	<!-- - - - - - - - - - - - - - - - - - 
+		Target : creating mysql db          
+	   - - - - - - - - - - - - - - - - - -->
+	<target name="_create-mysql-tibco-db" if="create-mysql-tibco-db" depends="_check-tibco-db">
+		<echo>Creating mysql db ${TIBCO_mysql_datasource_instance}</echo>
+		<sql driver="${TIBCO_datasource_driver}"
+		     url="${TIBCO_datasource_adminurl}"
+		     userid="${TIBCO_datasource_adminuser}"
+		     password="${TIBCO_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>
+			CREATE database IF NOT EXISTS ${TIBCO_mysql_datasource_instance};
+			ALTER DATABASE  ${TIBCO_mysql_datasource_instance} DEFAULT CHARACTER SET utf8 COLLATE utf8_bin;
+			</transaction>			
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : creating mysql tibco user          
+       ================================= -->
+	<target name="_create-mysql-tibco-user" if="create-mysql-tibco-user" depends="_create-mysql-tibco-db">
+		<sql driver="${TIBCO_datasource_driver}"
+		     url="${TIBCO_datasource_adminurl}"
+		     userid="${TIBCO_datasource_adminuser}"
+		     password="${TIBCO_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">
+			<!--
+			<transaction>
+			GRANT ALL PRIVILEGES ON *.* TO '${TIBCO_datasource_username}'@'%' identified by '${TIBCO_datasource_password}' with grant option;
+			GRANT ALL PRIVILEGES ON *.* TO '${TIBCO_datasource_username}'@'localhost' identified by '${TIBCO_datasource_password}' with grant option;
+			FLUSH PRIVILEGES;
+			</transaction>	
+			-->
+			<transaction>
+			flush privileges;
+			CREATE USER '${TIBCO_datasource_username}'@'localhost' IDENTIFIED BY '${TIBCO_datasource_password}';
+			CREATE USER '${TIBCO_datasource_username}'@'%' IDENTIFIED BY '${TIBCO_datasource_password}';
+			grant all PRIVILEGES on ${TIBCO_mysql_datasource_instance}.* to '${TIBCO_datasource_username}'@'localhost';
+			grant all PRIVILEGES on ${TIBCO_mysql_datasource_instance}.* to '${TIBCO_datasource_username}'@'%';
+			FLUSH PRIVILEGES;
+			</transaction>
+		</sql>		
+	</target>
+	
+	<!-- ================================= 
+		target : drop oracle tibco db users          
+    ================================= -->
+	<target name="_drop-oracle-tibco-users" if="drop-oracle-tibco-user" depends="_check-tibco-db">
+		<echo>Droping oracle tibco db users</echo>		
+		<sql driver="${TIBCO_datasource_driver}"
+			 url="${TIBCO_datasource_url}"
+			 userid="${TIBCO_datasource_adminuser}"
+			 password="${TIBCO_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">				
+				<transaction>
+					DROP USER ${TIBCO_datasource_username} cascade;
+				</transaction>				
+		</sql>					
+	</target>
+
+	<!-- ================================= 
+		target : drop sqlserver tibco user          
+       ================================= -->
+	<target name="_drop-sqlserver-tibco-user" if="drop-sqlserver-tibco-user" depends="_check-tibco-db">
+		<sql driver="${TIBCO_datasource_driver}"
+		     url="${TIBCO_datasource_url}"
+		     userid="${TIBCO_datasource_adminuser}"
+		     password="${TIBCO_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>												
+				DROP SCHEMA ${TIBCO_datasource_username};
+			</transaction>
+			<transaction>												
+				DROP USER ${TIBCO_datasource_username};
+			</transaction>
+		</sql>
+		
+		<sql driver="${TIBCO_datasource_driver}"
+		     url="${TIBCO_datasource_adminurl}"
+		     userid="${TIBCO_datasource_adminuser}"
+		     password="${TIBCO_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				DROP LOGIN ${TIBCO_datasource_username};	
+			</transaction>
+		</sql>		
+	</target>
+	
+	<!-- ================================= 
+		target : drop mysql tibco db user
+    ================================= -->
+	<target name="_drop-mysql-tibco-user" if="drop-mysql-tibco-user" depends="_check-tibco-db">
+		<echo>Droping mysql tibco db user</echo>		
+		<sql driver="${TIBCO_datasource_driver}"
+			 url="${TIBCO_datasource_adminurl}"
+			 userid="${TIBCO_datasource_adminuser}"
+			 password="${TIBCO_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">				
+			<transaction>
+				DROP USER '${TIBCO_datasource_username}'@'localhost';
+				DROP USER '${TIBCO_datasource_username}'@'%';
+				FLUSH PRIVILEGES;
+			</transaction>				
+		</sql>					
+	</target>
+	
+  	<!-- =================================   
+		target : _check-soft-db
+    ================================= -->
+	<target name="_check-soft-db" depends="_loadConfig">
+
+		<echo>Checking SOFT db type ${SOFTMonitor_datasource_type}</echo>
+					  
+		<!-- oracle -->
+		<condition property="create-oracle-soft-user">
+			<and>
+				<contains string="${SOFTMonitor_datasource_url}" substring="oracle" casesensitive="false"/>
+				<isset property="SOFTMonitor_datasource_adminuser"/>
+				<isset property="SOFTMonitor_datasource_adminpassword"/>
+				<or>					
+					<not><equals arg1="${SOFTMonitor_datasource_url}" arg2="${TIBCO_datasource_url}"/></not>
+					<not><equals arg1="${SOFTMonitor_datasource_username}" arg2="${TIBCO_datasource_username}"/></not>
+				</or>			
+			</and>
+		</condition>
+		<condition property="drop-oracle-soft-user">
+			<and>				
+				<isset property="create-oracle-soft-user"/>				
+			</and>
+		</condition>		
+		<condition property="create-oracle-soft-db">
+			<and>				
+				<isset property="create-oracle-soft-user"/>
+				<isset property="SOFTMonitor_datasource_tslocation"/>				
+			</and>
+		</condition>	
+		
+		
+		<!-- sqlserver -->
+		<condition property="create-sqlserver-soft-user">
+			<and>
+				<contains string="${SOFTMonitor_datasource_url}" substring="sqlserver" casesensitive="false"/>				
+				<isset property="SOFTMonitor_datasource_adminuser"/>
+				<isset property="SOFTMonitor_datasource_adminpassword"/>
+				<isset property="SOFTMonitor_mssql_datasource_instance"/>
+				<isset property="SOFTMonitor_datasource_adminurl"/>								
+				<or>					
+					<not><equals arg1="${SOFTMonitor_datasource_url}" arg2="${TIBCO_datasource_url}"/></not>
+					<not><equals arg1="${SOFTMonitor_datasource_username}" arg2="${TIBCO_datasource_username}"/></not>
+				</or>
+			</and>
+		</condition>						
+		<condition property="drop-sqlserver-soft-user">
+			<and>				
+				<isset property="create-sqlserver-soft-user"/>				
+			</and>
+		</condition>		
+		<condition property="create-sqlserver-soft-db">
+			<and>
+				<isset property="create-sqlserver-soft-user"/>
+				<isset property="SOFTMonitor_datasource_tslocation"/>												
+				<or>
+					<not><equals arg1="${SOFTMonitor_datasource_url}" arg2="${TIBCO_datasource_url}"/></not>
+				</or>
+			</and>
+		</condition>		
+		
+		
+		
+		<!-- mysql -->
+		<condition property="create-mysql-soft-user">
+			<and>
+				<contains string="${SOFTMonitor_datasource_url}" substring="mysql" casesensitive="false"/>
+				<isset property="SOFTMonitor_mysql_datasource_instance"/>				
+				<isset property="SOFTMonitor_datasource_adminuser"/>
+				<isset property="SOFTMonitor_datasource_adminpassword"/>				
+				<isset property="SOFTMonitor_datasource_adminurl"/>								
+				<or>					
+					<not><equals arg1="${SOFTMonitor_datasource_url}" arg2="${TIBCO_datasource_url}"/></not>
+					<not><equals arg1="${SOFTMonitor_datasource_username}" arg2="${TIBCO_datasource_username}"/></not>
+				</or>
+			</and>
+		</condition>		
+		<condition property="drop-mysql-soft-user">
+			<and>				
+				<isset property="create-mysql-soft-user"/>				
+			</and>
+		</condition>						
+		<condition property="create-mysql-soft-db">
+			<and>
+				<isset property="create-mysql-soft-user"/>															
+				<or>
+					<not><equals arg1="${SOFTMonitor_datasource_url}" arg2="${TIBCO_datasource_url}"/></not>
+				</or>
+			</and>
+		</condition>		
+		
+		
+		
+		<!-- Check if user exists -->
+		<if>
+			<isset property="create-oracle-soft-user"/>
+			<then>
+				<echo message="select 1 from dual" file="${validate.sql}" append="false"/>
+			</then>
+		</if>
+		<if>
+			<isset property="create-sqlserver-soft-user"/>
+			<then>
+				<echo message="select 1" file="${validate.sql}" append="false"/>
+			</then>
+		</if>		
+		<if>
+			<isset property="create-mysql-soft-user"/>
+			<then>
+				<echo message="select 1" file="${validate.sql}" append="false"/>
+			</then>
+		</if>
+		
+		<!-- Check if user exists -->
+		<if>
+			<or>
+				<isset property="create-oracle-soft-user"/>
+				<isset property="create-sqlserver-soft-user"/>
+				<isset property="create-mysql-soft-user"/>
+			</or>
+			<then>
+				<trycatch>
+					<try>
+						<sql driver="${SOFTMonitor_datasource_driver}"
+							 url="${SOFTMonitor_datasource_url}"
+							 userid="${SOFTMonitor_datasource_username}"
+							 password="${SOFTMonitor_datasource_password}"					
+							 classpathref="sql.classpath"
+							 src="${validate.sql}"
+						/>
+						<var name="create-oracle-soft-user" unset="true"/>
+						<var name="create-oracle-soft-db" unset="true"/>
+						<var name="create-sqlserver-soft-user" unset="true"/>
+						<var name="create-sqlserver-soft-db" unset="true"/>
+						<var name="create-mysql-soft-user" unset="true"/>
+						<var name="create-mysql-soft-db" unset="true"/>
+					</try>				
+					<catch>
+						<var name="drop-oracle-soft-user" unset="true"/>
+						<var name="drop-sqlserver-soft-user" unset="true"/>
+						<var name="drop-mysql-soft-user" unset="true"/>
+					</catch>
+					<finally>
+						<delete file="${validate.sql}" failonerror="false" quiet="true"/>
+					</finally>			
+				</trycatch>
+			</then>
+		</if>
+	</target>
+	
+	<!-- ================================= 
+		target : creating oracle soft db          
+       ================================= -->
+	<target name="_create-oracle-soft-db" if="create-oracle-soft-db" depends="_check-soft-db">
+		<echo>Creating oracle soft db</echo>		
+		<sql driver="${SOFTMonitor_datasource_driver}"
+			 url="${SOFTMonitor_datasource_url}"
+			 userid="${SOFTMonitor_datasource_adminuser}"
+			 password="${SOFTMonitor_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">
+				<transaction>
+					CREATE TABLESPACE "${TAB_SMALL}" LOGGING  DATAFILE '${SOFTMonitor_datasource_tslocation}/${TAB_SMALL}_0.dbf' SIZE ${TAB_SMALL_SIZE} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 64K;
+				</transaction>
+				<transaction>
+					CREATE TABLESPACE "${TAB_LOB}" LOGGING  DATAFILE '${SOFTMonitor_datasource_tslocation}/${TAB_LOB}_0.dbf' SIZE ${TAB_LOB_SIZE} AUTOEXTEND ON NEXT 64M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 32M;
+				</transaction>
+				<transaction>
+					CREATE TABLESPACE "${TAB_BIG}" LOGGING  DATAFILE '${SOFTMonitor_datasource_tslocation}/${TAB_BIG}_0.dbf' SIZE ${TAB_BIG_SIZE} AUTOEXTEND ON NEXT 64M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 32M;
+				</transaction>
+				<transaction>
+					CREATE TABLESPACE "${TAB_IDX_BIG}" LOGGING  DATAFILE '${SOFTMonitor_datasource_tslocation}/${TAB_IDX_BIG}_0.dbf' SIZE ${TAB_IDX_BIG_SIZE} AUTOEXTEND ON NEXT 32M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 8M;
+				</transaction>
+				<transaction>
+					CREATE TABLESPACE "${TAB_IDX_SMALL}" LOGGING  DATAFILE '${SOFTMonitor_datasource_tslocation}/${TAB_IDX_SMALL}_0.dbf' SIZE ${TAB_IDX_SMALL_SIZE} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 64K;
+				</transaction>				
+		</sql>					
+	</target>
+
+	<!-- ================================= 
+		target : creating oracle soft user          
+       ================================= -->
+	<target name="_create-oracle-soft-user" if="create-oracle-soft-user" depends="_create-oracle-soft-db">
+		<echo>Creating oracle soft user</echo>		
+		<sql driver="${SOFTMonitor_datasource_driver}"
+			 url="${SOFTMonitor_datasource_url}"
+			 userid="${SOFTMonitor_datasource_adminuser}"
+			 password="${SOFTMonitor_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true">
+				<transaction>
+					CREATE USER ${SOFTMonitor_datasource_username} PROFILE "DEFAULT" IDENTIFIED BY "${SOFTMonitor_datasource_password}" TEMPORARY TABLESPACE "TEMP" ACCOUNT UNLOCK;
+					ALTER USER ${SOFTMonitor_datasource_username} DEFAULT TABLESPACE "${TAB_SMALL}";
+				</transaction>
+				<transaction>
+					GRANT CONNECT,RESOURCE TO ${SOFTMonitor_datasource_username};
+					GRANT CREATE MATERIALIZED VIEW TO ${SOFTMonitor_datasource_username};
+					grant create view to ${SOFTMonitor_datasource_username};
+				</transaction>
+				<transaction>					
+					GRANT UNLIMITED TABLESPACE TO ${SOFTMonitor_datasource_username};
+				</transaction>
+		</sql>					
+	</target>
+
+	<!-- ================================= 
+		target : creating sqlserver soft db          
+       ================================= -->
+	<target name="_create-sqlserver-soft-db" if="create-sqlserver-soft-db" depends="_check-soft-db">
+		<echo>Creating sqlserver soft db ${SOFTMonitor_mssql_datasource_instance}</echo>
+		<sql driver="${SOFTMonitor_datasource_driver}"
+		     url="${SOFTMonitor_datasource_adminurl}"
+		     userid="${SOFTMonitor_datasource_adminuser}"
+		     password="${SOFTMonitor_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">
+			<transaction>
+				CREATE DATABASE ${SOFTMonitor_mssql_datasource_instance} ON ( NAME = ${SOFTMonitor_mssql_datasource_instance}_dat, FILENAME = '${SOFTMonitor_datasource_tslocation}\${SOFTMonitor_mssql_datasource_instance}.mdf', SIZE = ${SOFTMonitor_datasource_dbsize}, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB ) LOG ON ( NAME = ${SOFTMonitor_mssql_datasource_instance}_log, FILENAME = '${SOFTMonitor_datasource_tslocation}\${SOFTMonitor_mssql_datasource_instance}.ldf', SIZE = 5MB, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB );				
+				ALTER DATABASE ${SOFTMonitor_mssql_datasource_instance} SET ALLOW_SNAPSHOT_ISOLATION ON;
+				ALTER DATABASE ${SOFTMonitor_mssql_datasource_instance} SET READ_COMMITTED_SNAPSHOT ON;																
+			</transaction>			
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : creating sqlserver soft user          
+       ================================= -->
+	<target name="_create-sqlserver-soft-user" if="create-sqlserver-soft-user" depends="_create-sqlserver-soft-db">
+
+		<sql driver="${SOFTMonitor_datasource_driver}"
+		     url="${SOFTMonitor_datasource_adminurl}"
+		     userid="${SOFTMonitor_datasource_adminuser}"
+		     password="${SOFTMonitor_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				CREATE LOGIN ${SOFTMonitor_datasource_username} WITH PASSWORD = '${SOFTMonitor_datasource_password}', DEFAULT_DATABASE=${SOFTMonitor_mssql_datasource_instance}, CHECK_POLICY=OFF;	
+				ALTER  LOGIN ${SOFTMonitor_datasource_username} WITH PASSWORD = '${SOFTMonitor_datasource_password}', DEFAULT_DATABASE=${SOFTMonitor_mssql_datasource_instance}, CHECK_POLICY=OFF;				
+			</transaction>
+		</sql>
+
+		<sql driver="${SOFTMonitor_datasource_driver}"
+		     url="${SOFTMonitor_datasource_url}"
+		     userid="${SOFTMonitor_datasource_adminuser}"
+		     password="${SOFTMonitor_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>								
+				CREATE USER ${SOFTMonitor_datasource_username} FOR LOGIN ${SOFTMonitor_datasource_username} WITH DEFAULT_SCHEMA = ${SOFTMonitor_datasource_username};
+				ALTER USER ${SOFTMonitor_datasource_username} WITH LOGIN = ${SOFTMonitor_datasource_username}, DEFAULT_SCHEMA = ${SOFTMonitor_datasource_username};
+				CREATE SCHEMA ${SOFTMonitor_datasource_username} AUTHORIZATION ${SOFTMonitor_datasource_username};
+				ALTER AUTHORIZATION ON SCHEMA::${SOFTMonitor_datasource_username} TO ${SOFTMonitor_datasource_username};
+			</transaction>
+			<transaction>
+				GRANT CONNECT TO ${SOFTMonitor_datasource_username};
+				GRANT CREATE TABLE TO ${SOFTMonitor_datasource_username};
+				GRANT CREATE PROCEDURE TO ${SOFTMonitor_datasource_username};
+				GRANT CREATE VIEW TO ${SOFTMonitor_datasource_username};
+				exec sp_addrolemember 'db_owner', ${SOFTMonitor_datasource_username};
+			</transaction>
+		</sql>
+	</target>
+	
+	<!-- - - - - - - - - - - - - - - - - - 
+		Target : creating mysql db          
+	   - - - - - - - - - - - - - - - - - -->
+	<target name="_create-mysql-soft-db" if="create-mysql-soft-db" depends="_check-soft-db">
+		<echo>Creating mysql db ${SOFTMonitor_mysql_datasource_instance}</echo>
+		<sql driver="${SOFTMonitor_datasource_driver}"
+		     url="${SOFTMonitor_datasource_adminurl}"
+		     userid="${SOFTMonitor_datasource_adminuser}"
+		     password="${SOFTMonitor_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>
+			CREATE database IF NOT EXISTS ${SOFTMonitor_mysql_datasource_instance};
+			ALTER DATABASE  ${SOFTMonitor_mysql_datasource_instance} DEFAULT CHARACTER SET utf8 COLLATE utf8_bin;
+			</transaction>			
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : creating mysql soft user          
+       ================================= -->
+	<target name="_create-mysql-soft-user" if="create-mysql-soft-user" depends="_create-mysql-soft-db">
+		<sql driver="${SOFTMonitor_datasource_driver}"
+		     url="${SOFTMonitor_datasource_adminurl}"
+		     userid="${SOFTMonitor_datasource_adminuser}"
+		     password="${SOFTMonitor_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">
+			<!--
+			<transaction>
+			GRANT ALL PRIVILEGES ON *.* TO '${SOFTMonitor_datasource_username}'@'%' identified by '${SOFTMonitor_datasource_password}' with grant option;
+			GRANT ALL PRIVILEGES ON *.* TO '${SOFTMonitor_datasource_username}'@'localhost' identified by '${SOFTMonitor_datasource_password}' with grant option;
+			FLUSH PRIVILEGES;
+			</transaction>		
+			-->
+			<transaction>
+			flush privileges;
+			CREATE USER '${SOFTMonitor_datasource_username}'@'localhost' IDENTIFIED BY '${SOFTMonitor_datasource_password}';
+			CREATE USER '${SOFTMonitor_datasource_username}'@'%' IDENTIFIED BY '${SOFTMonitor_datasource_password}';				
+			grant all PRIVILEGES on ${SOFTMonitor_mysql_datasource_instance}.* to '${SOFTMonitor_datasource_username}'@'localhost';
+			grant all PRIVILEGES on ${SOFTMonitor_mysql_datasource_instance}.* to '${SOFTMonitor_datasource_username}'@'%';
+			FLUSH PRIVILEGES;
+			</transaction>
+		</sql>		
+	</target>
+	
+	<!-- ================================= 
+		target : drop oracle soft users          
+    ================================= -->
+	<target name="_drop-oracle-soft-users" if="drop-oracle-soft-user" depends="_check-soft-db">
+		<echo>Droping oracle soft users</echo>		
+		<sql driver="${SOFTMonitor_datasource_driver}"
+			 url="${SOFTMonitor_datasource_url}"
+			 userid="${SOFTMonitor_datasource_adminuser}"
+			 password="${SOFTMonitor_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">				
+				<transaction>
+					DROP USER ${SOFTMonitor_datasource_username} cascade;
+				</transaction>				
+		</sql>					
+	</target>
+
+	<!-- ================================= 
+		target : drop sqlserver soft user          
+       ================================= -->
+	<target name="_drop-sqlserver-soft-user" if="drop-sqlserver-soft-user" depends="_check-soft-db">
+		<sql driver="${SOFTMonitor_datasource_driver}"
+		     url="${SOFTMonitor_datasource_url}"
+		     userid="${SOFTMonitor_datasource_adminuser}"
+		     password="${SOFTMonitor_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">	
+			<transaction>												
+				DROP SCHEMA ${SOFTMonitor_datasource_username};
+			</transaction>
+			<transaction>												
+				DROP USER ${SOFTMonitor_datasource_username};
+			</transaction>			
+		</sql>
+		
+		<sql driver="${SOFTMonitor_datasource_driver}"
+		     url="${SOFTMonitor_datasource_adminurl}"
+		     userid="${SOFTMonitor_datasource_adminuser}"
+		     password="${SOFTMonitor_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				DROP LOGIN ${SOFTMonitor_datasource_username};
+			</transaction>
+		</sql>		
+	</target>
+
+	<!-- ================================= 
+		target : drop mysql soft db user
+    ================================= -->
+	<target name="_drop-mysql-soft-user" if="drop-mysql-soft-user" depends="_check-soft-db">
+		<echo>Droping mysql soft db user</echo>		
+		<sql driver="${SOFTMonitor_datasource_driver}"
+			 url="${SOFTMonitor_datasource_adminurl}"
+			 userid="${SOFTMonitor_datasource_adminuser}"
+			 password="${SOFTMonitor_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">				
+			<transaction>
+				DROP USER '${SOFTMonitor_datasource_username}'@'localhost';
+				DROP USER '${SOFTMonitor_datasource_username}'@'%';
+				FLUSH PRIVILEGES;
+			</transaction>				
+		</sql>					
+	</target>
+	
+	<!-- =================================   
+		target : _check-mft-db
+    ================================= -->
+	<target name="_check-mft-db" depends="_loadConfig">
+
+		<echo>Checking MFT db type ${MFT_datasource_type}</echo>
+					  		
+		<condition property="create-oracle-mft-user">
+			<and>
+				<equals arg1="${MFT_datasource_type}" arg2="oracle" />
+				<isset property="MFT_datasource_adminuser"/>
+				<isset property="MFT_datasource_adminpassword"/>
+				<or>
+					<not><equals arg1="${MFT_datasource_type}" arg2="${TIBCO_datasource_type}"/></not>
+					<not><equals arg1="${MFT_datasource_url}" arg2="${TIBCO_datasource_url}"/></not>
+					<not><equals arg1="${MFT_datasource_username}" arg2="${TIBCO_datasource_username}"/></not>					
+				</or>			
+			</and>
+		</condition>
+		
+		<condition property="drop-oracle-mft-user">
+			<and>
+				<isset property="create-oracle-mft-user"/>											
+			</and>
+		</condition>	
+		
+		<condition property="create-oracle-mft-db">
+			<and>
+				<isset property="create-oracle-mft-user"/>
+				<isset property="MFT_datasource_tslocation"/>										
+			</and>
+		</condition>	
+
+		
+		<condition property="create-sqlserver-mft-user">
+			<and>
+				<equals arg1="${MFT_datasource_type}" arg2="sqlserver" />
+				<isset property="MFT_datasource_adminuser"/>
+				<isset property="MFT_datasource_adminpassword"/>
+				<isset property="MFT_mssql_datasource_instance"/>
+				<isset property="MFT_datasource_adminurl"/>								
+				<or>
+					<not><equals arg1="${MFT_datasource_type}" arg2="${TIBCO_datasource_type}"/></not>
+					<not><equals arg1="${MFT_mssql_datasource_instance}" arg2="${TIBCO_mssql_datasource_instance}"/></not>
+					<not><equals arg1="${MFT_datasource_username}" arg2="${TIBCO_datasource_username}"/></not>					
+				</or>
+			</and>
+		</condition>
+			
+		<condition property="drop-sqlserver-mft-user">
+			<and>
+				<isset property="create-sqlserver-mft-user"/>											
+			</and>
+		</condition>	
+		
+		<condition property="create-sqlserver-mft-db">
+			<and>
+				<isset property="create-sqlserver-mft-user"/>
+				<isset property="MFT_datasource_tslocation"/>				
+				<or>
+					<not><equals arg1="${MFT_datasource_type}" arg2="${TIBCO_datasource_type}"/></not>
+					<not><equals arg1="${MFT_mssql_datasource_instance}" arg2="${TIBCO_mssql_datasource_instance}"/></not>					
+				</or>
+			</and>
+		</condition>		
+				
+		<!-- Check if user exists -->
+		<if>
+			<equals arg1="${MFT_datasource_type}" arg2="sqlserver" />
+			<then>
+				<echo message="select 1" file="${validate.sql}" append="false"/>
+			</then>
+			<elseif>
+				<equals arg1="${MFT_datasource_type}" arg2="oracle" />
+				<then>
+					<echo message="select 1 from dual" file="${validate.sql}" append="false"/>
+				</then>
+			</elseif>
+		</if>
+		
+		<!-- Check if user exists -->
+		<if>
+			<or>
+				<isset property="create-oracle-mft-user"/>
+				<isset property="create-sqlserver-mft-user"/>				
+			</or>
+			<then>
+				<trycatch>
+					<try>
+						<sql driver="${MFT_datasource_driver}"
+							 url="${MFT_datasource_url}"
+							 userid="${MFT_datasource_username}"
+							 password="${MFT_datasource_password}"					
+							 classpathref="sql.classpath"
+							 src="${validate.sql}"
+						/>
+						<var name="create-oracle-mft-user" unset="true"/>
+						<var name="create-oracle-mft-db" unset="true"/>
+						<var name="create-sqlserver-mft-user" unset="true"/>
+						<var name="create-sqlserver-mft-db" unset="true"/>
+					</try>				
+					<catch>
+						<var name="drop-oracle-mft-user" unset="true"/>
+						<var name="drop-sqlserver-mft-user" unset="true"/>
+					</catch>
+					<finally>
+						<delete file="${validate.sql}" failonerror="false" quiet="true"/>
+					</finally>			
+				</trycatch>
+			</then>
+		</if>
+	</target>
+		
+	<!-- ================================= 
+		target : creating oracle mft db          
+    ================================= -->
+	<target name="_create-oracle-mft-db" if="create-oracle-mft-db" depends="_check-mft-db">
+		<echo>Creating oracle mft db</echo>		
+		<sql driver="${MFT_datasource_driver}"
+			 url="${MFT_datasource_url}"
+			 userid="${MFT_datasource_adminuser}"
+			 password="${MFT_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">
+				<transaction>
+					CREATE TABLESPACE "${MFT_datasource_tablespace_name}" LOGGING  DATAFILE '${MFT_datasource_tslocation}/${MFT_datasource_tablespace_name}_0.dbf' SIZE ${MFT_datasource_tablespace_size} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 64K;
+				</transaction>				
+				<transaction>
+					CREATE TABLESPACE "${MFT_datasource_indexspace_name}" LOGGING  DATAFILE '${MFT_datasource_tslocation}/${MFT_datasource_indexspace_name}_0.dbf' SIZE ${MFT_datasource_indexspace_size} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 64K;
+				</transaction>				
+		</sql>					
+	</target>
+
+    <!-- ================================= 
+		target : creating oracle mft user          
+    ================================= -->
+	<target name="_create-oracle-mft-user" if="create-oracle-mft-user" depends="_create-oracle-mft-db">
+		<echo>Creating oracle mft user</echo>		
+		<sql driver="${MFT_datasource_driver}"
+			 url="${MFT_datasource_url}"
+			 userid="${MFT_datasource_adminuser}"
+			 password="${MFT_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true">				
+				<transaction>
+					CREATE USER ${MFT_datasource_username} PROFILE "DEFAULT" IDENTIFIED BY "${MFT_datasource_password}" TEMPORARY TABLESPACE "TEMP" ACCOUNT UNLOCK;
+					ALTER USER ${MFT_datasource_username} DEFAULT TABLESPACE "${MFT_datasource_tablespace_name}";
+				</transaction>
+				<transaction>
+					GRANT CONNECT,RESOURCE TO ${MFT_datasource_username};
+					GRANT CREATE MATERIALIZED VIEW TO ${MFT_datasource_username};
+					grant create view to ${MFT_datasource_username};
+				</transaction>
+				<transaction>					
+					GRANT UNLIMITED TABLESPACE TO ${MFT_datasource_username};
+				</transaction>
+		</sql>					
+	</target>
+
+<!-- ================================= 
+		target : creating sqlserver mft db          
+       ================================= -->
+	<target name="_create-sqlserver-mft-db" if="create-sqlserver-mft-db" depends="_check-mft-db">
+		<echo>Creating sqlserver mft db ${MFT_mssql_datasource_instance}</echo>
+		<sql driver="${MFT_datasource_driver}"
+		     url="${MFT_datasource_adminurl}"
+		     userid="${MFT_datasource_adminuser}"
+		     password="${MFT_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">
+			<transaction>
+				CREATE DATABASE ${MFT_mssql_datasource_instance} ON ( NAME = ${MFT_mssql_datasource_instance}_dat, FILENAME = '${MFT_datasource_tslocation}\${MFT_mssql_datasource_instance}.mdf', SIZE = ${MFT_datasource_dbsize}, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB ) LOG ON ( NAME = ${MFT_mssql_datasource_instance}_log, FILENAME = '${MFT_datasource_tslocation}\${MFT_mssql_datasource_instance}.ldf', SIZE = 5MB, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB );				
+				ALTER DATABASE ${MFT_mssql_datasource_instance} SET ALLOW_SNAPSHOT_ISOLATION ON;
+				ALTER DATABASE ${MFT_mssql_datasource_instance} SET READ_COMMITTED_SNAPSHOT ON;												
+			</transaction>			
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : creating sqlserver mft user          
+       ================================= -->
+	<target name="_create-sqlserver-mft-user" if="create-sqlserver-mft-user" depends="_create-sqlserver-mft-db">
+
+		<sql driver="${MFT_datasource_driver}"
+		     url="${MFT_datasource_adminurl}"
+		     userid="${MFT_datasource_adminuser}"
+		     password="${MFT_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				CREATE LOGIN ${MFT_datasource_username} WITH PASSWORD = '${MFT_datasource_password}', DEFAULT_DATABASE=${MFT_mssql_datasource_instance}, CHECK_POLICY=OFF;
+				ALTER  LOGIN ${MFT_datasource_username} WITH PASSWORD = '${MFT_datasource_password}', DEFAULT_DATABASE=${MFT_mssql_datasource_instance}, CHECK_POLICY=OFF;
+			</transaction>
+		</sql>
+
+		<sql driver="${MFT_datasource_driver}"
+		     url="${MFT_datasource_url}"
+		     userid="${MFT_datasource_adminuser}"
+		     password="${MFT_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>								
+				CREATE USER ${MFT_datasource_username} FOR LOGIN ${MFT_datasource_username} WITH DEFAULT_SCHEMA = ${MFT_datasource_username};
+				ALTER USER ${MFT_datasource_username} WITH LOGIN = ${MFT_datasource_username}, DEFAULT_SCHEMA = ${MFT_datasource_username};
+				CREATE SCHEMA ${MFT_datasource_username} AUTHORIZATION ${MFT_datasource_username};
+				ALTER AUTHORIZATION ON SCHEMA::${MFT_datasource_username} TO ${MFT_datasource_username};
+			</transaction>
+			<transaction>
+				GRANT CONNECT TO ${MFT_datasource_username};
+				GRANT CREATE TABLE TO ${MFT_datasource_username};
+				GRANT CREATE PROCEDURE TO ${MFT_datasource_username};
+				GRANT CREATE VIEW TO ${MFT_datasource_username};
+				exec sp_addrolemember 'db_owner', ${MFT_datasource_username};
+			</transaction>
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : drop oracle mft db users          
+    ================================= -->
+	<target name="_drop-oracle-mft-users" if="drop-oracle-mft-user" depends="_check-mft-db">
+		<echo>Droping oracle mft db users</echo>		
+		<sql driver="${MFT_datasource_driver}"
+			 url="${MFT_datasource_url}"
+			 userid="${MFT_datasource_adminuser}"
+			 password="${MFT_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">				
+				<transaction>
+					DROP USER ${MFT_datasource_username} cascade;
+				</transaction>				
+		</sql>					
+	</target>
+
+	<!-- ================================= 
+		target : drop sqlserver mft user          
+       ================================= -->
+	<target name="_drop-sqlserver-mft-user" if="drop-sqlserver-mft-user" depends="_check-mft-db">
+		<sql driver="${MFT_datasource_driver}"
+		     url="${MFT_datasource_url}"
+		     userid="${MFT_datasource_adminuser}"
+		     password="${MFT_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>												
+				DROP SCHEMA ${MFT_datasource_username};
+			</transaction>
+			<transaction>												
+				DROP USER ${MFT_datasource_username};
+			</transaction>
+		</sql>
+		
+		<sql driver="${MFT_datasource_driver}"
+		     url="${MFT_datasource_adminurl}"
+		     userid="${MFT_datasource_adminuser}"
+		     password="${MFT_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				DROP LOGIN ${MFT_datasource_username};			
+			</transaction>
+		</sql>		
+	</target>
+	
+	<!-- =================================   
+		target : _check-bc-db
+    ================================= -->
+	<target name="_check-bc-db" depends="_loadConfig">
+
+		<echo>Checking BC db type ${BC_datasource_type}</echo>
+					  		
+		<condition property="create-oracle-bc-user">
+			<and>
+				<equals arg1="${BC_datasource_type}" arg2="oracle" />
+				<isset property="BC_datasource_adminuser"/>
+				<isset property="BC_datasource_adminpassword"/>
+				<or>
+					<not><equals arg1="${BC_datasource_type}" arg2="${TIBCO_datasource_type}"/></not>
+					<not><equals arg1="${BC_datasource_url}" arg2="${TIBCO_datasource_url}"/></not>
+					<not><equals arg1="${BC_datasource_username}" arg2="${TIBCO_datasource_username}"/></not>					
+				</or>			
+			</and>
+		</condition>
+		
+		<condition property="drop-oracle-bc-user">
+			<and>
+				<isset property="create-oracle-bc-user"/>											
+			</and>
+		</condition>	
+		
+		<condition property="create-oracle-bc-db">
+			<and>
+				<isset property="create-oracle-bc-user"/>
+				<isset property="BC_datasource_tslocation"/>								
+			</and>
+		</condition>	
+			
+		<condition property="create-sqlserver-bc-user">
+			<and>
+				<equals arg1="${BC_datasource_type}" arg2="sqlserver" />
+				<isset property="BC_datasource_adminuser"/>
+				<isset property="BC_datasource_adminpassword"/>
+				<isset property="BC_mssql_datasource_instance"/>
+				<isset property="BC_datasource_adminurl"/>								
+				<or>
+					<not><equals arg1="${BC_datasource_type}" arg2="${TIBCO_datasource_type}"/></not>
+					<not><equals arg1="${BC_mssql_datasource_instance}" arg2="${TIBCO_mssql_datasource_instance}"/></not>
+					<not><equals arg1="${BC_datasource_username}" arg2="${TIBCO_datasource_username}"/></not>					
+				</or>
+			</and>
+		</condition>
+
+		<condition property="drop-sqlserver-bc-user">
+			<and>
+				<isset property="create-sqlserver-bc-user"/>											
+			</and>
+		</condition>
+		
+		<condition property="create-sqlserver-bc-db">
+			<and>
+				<isset property="create-sqlserver-bc-user"/>
+				<isset property="BC_datasource_tslocation"/>													
+				<or>
+					<not><equals arg1="${BC_datasource_type}" arg2="${TIBCO_datasource_type}"/></not>
+					<not><equals arg1="${BC_mssql_datasource_instance}" arg2="${TIBCO_mssql_datasource_instance}"/></not>					
+				</or>
+			</and>
+		</condition>		
+		
+		<!-- Check if user exists -->
+		<if>
+			<equals arg1="${BC_datasource_type}" arg2="sqlserver" />
+			<then>
+				<echo message="select 1" file="${validate.sql}" append="false"/>
+			</then>
+			<elseif>
+				<equals arg1="${BC_datasource_type}" arg2="oracle" />
+				<then>
+					<echo message="select 1 from dual" file="${validate.sql}" append="false"/>
+				</then>
+			</elseif>
+		</if>
+		
+		<!-- Check if user exists -->
+		<if>
+			<or>
+				<isset property="create-oracle-bc-user"/>
+				<isset property="create-sqlserver-bc-user"/>				
+			</or>
+			<then>
+				<trycatch>
+					<try>
+						<sql driver="${BC_datasource_driver}"
+							 url="${BC_datasource_url}"
+							 userid="${BC_datasource_username}"
+							 password="${BC_datasource_password}"					
+							 classpathref="sql.classpath"
+							 src="${validate.sql}"
+						/>
+						<var name="create-oracle-bc-user" unset="true"/>
+						<var name="create-oracle-bc-db" unset="true"/>
+						<var name="create-sqlserver-bc-user" unset="true"/>
+						<var name="create-sqlserver-bc-db" unset="true"/>
+					</try>				
+					<catch>
+						<var name="drop-oracle-bc-user" unset="true"/>
+						<var name="drop-sqlserver-bc-user" unset="true"/>
+					</catch>
+					<finally>
+						<delete file="${validate.sql}" failonerror="false" quiet="true"/>
+					</finally>
+				</trycatch>
+			</then>
+		</if>
+	</target>
+		
+	<!-- ================================= 
+		target : creating oracle bc db          
+    ================================= -->
+	<target name="_create-oracle-bc-db" if="create-oracle-bc-db" depends="_check-bc-db">
+		<echo>Creating oracle bc db</echo>		
+		<sql driver="${BC_datasource_driver}"
+			 url="${BC_datasource_url}"
+			 userid="${BC_datasource_adminuser}"
+			 password="${BC_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">
+				<transaction>
+					CREATE TABLESPACE "${BC_datasource_tablespace_name}" LOGGING  DATAFILE '${BC_datasource_tslocation}/${BC_datasource_tablespace_name}_0.dbf' SIZE ${BC_datasource_tablespace_size} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 64K;
+				</transaction>				
+				<transaction>
+					CREATE TABLESPACE "${BC_datasource_indexspace_name}" LOGGING  DATAFILE '${BC_datasource_tslocation}/${BC_datasource_indexspace_name}_0.dbf' SIZE ${BC_datasource_indexspace_size} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 64K;
+				</transaction>				
+		</sql>					
+	</target>
+
+    <!-- ================================= 
+		target : creating oracle bc user          
+    ================================= -->
+	<target name="_create-oracle-bc-user" if="create-oracle-bc-user" depends="_create-oracle-bc-db">
+		<echo>Creating oracle bc db</echo>		
+		<sql driver="${BC_datasource_driver}"
+			 url="${BC_datasource_url}"
+			 userid="${BC_datasource_adminuser}"
+			 password="${BC_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true">				
+				<transaction>
+					CREATE USER ${BC_datasource_username} PROFILE "DEFAULT" IDENTIFIED BY "${BC_datasource_password}" TEMPORARY TABLESPACE "TEMP" ACCOUNT UNLOCK;
+					ALTER USER ${BC_datasource_username} DEFAULT TABLESPACE "${BC_datasource_tablespace_name}";
+				</transaction>
+				<transaction>
+					GRANT CONNECT,RESOURCE TO ${BC_datasource_username};
+					GRANT CREATE MATERIALIZED VIEW TO ${BC_datasource_username};
+					grant create view to ${BC_datasource_username};
+				</transaction>
+				<transaction>					
+					GRANT UNLIMITED TABLESPACE TO ${BC_datasource_username};
+				</transaction>
+		</sql>					
+	</target>
+
+<!-- ================================= 
+		target : creating sqlserver bc db          
+       ================================= -->
+	<target name="_create-sqlserver-bc-db" if="create-sqlserver-bc-db" depends="_check-bc-db">
+		<echo>Creating sqlserver bc db ${BC_mssql_datasource_instance}</echo>
+		<sql driver="${BC_datasource_driver}"
+		     url="${BC_datasource_adminurl}"
+		     userid="${BC_datasource_adminuser}"
+		     password="${BC_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">
+			<transaction>
+				CREATE DATABASE ${BC_mssql_datasource_instance} ON ( NAME = ${BC_mssql_datasource_instance}_dat, FILENAME = '${BC_datasource_tslocation}\${BC_mssql_datasource_instance}.mdf', SIZE = ${BC_datasource_dbsize}, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB ) LOG ON ( NAME = ${BC_mssql_datasource_instance}_log, FILENAME = '${BC_datasource_tslocation}\${BC_mssql_datasource_instance}.ldf', SIZE = 5MB, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB );
+				ALTER DATABASE ${BC_mssql_datasource_instance} SET ALLOW_SNAPSHOT_ISOLATION ON;
+				ALTER DATABASE ${BC_mssql_datasource_instance} SET READ_COMMITTED_SNAPSHOT ON;												
+			</transaction>			
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : creating sqlserver bc user          
+       ================================= -->
+	<target name="_create-sqlserver-bc-user" if="create-sqlserver-bc-user" depends="_create-sqlserver-bc-db">
+
+		<sql driver="${BC_datasource_driver}"
+		     url="${BC_datasource_adminurl}"
+		     userid="${BC_datasource_adminuser}"
+		     password="${BC_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				CREATE LOGIN ${BC_datasource_username} WITH PASSWORD = '${BC_datasource_password}', DEFAULT_DATABASE=${BC_mssql_datasource_instance}, CHECK_POLICY=OFF;
+				ALTER  LOGIN ${BC_datasource_username} WITH PASSWORD = '${BC_datasource_password}', DEFAULT_DATABASE=${BC_mssql_datasource_instance}, CHECK_POLICY=OFF;
+			</transaction>
+		</sql>
+
+		<sql driver="${BC_datasource_driver}"
+		     url="${BC_datasource_url}"
+		     userid="${BC_datasource_adminuser}"
+		     password="${BC_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>								
+				CREATE USER ${BC_datasource_username} FOR LOGIN ${BC_datasource_username} WITH DEFAULT_SCHEMA = ${BC_datasource_username};
+				ALTER USER ${BC_datasource_username} WITH LOGIN = ${BC_datasource_username}, DEFAULT_SCHEMA = ${BC_datasource_username};
+				CREATE SCHEMA ${BC_datasource_username} AUTHORIZATION ${BC_datasource_username};
+				ALTER AUTHORIZATION ON SCHEMA::${BC_datasource_username} TO ${BC_datasource_username};
+			</transaction>
+			<transaction>
+				GRANT CONNECT TO ${BC_datasource_username};
+				GRANT CREATE TABLE TO ${BC_datasource_username};
+				GRANT CREATE PROCEDURE TO ${BC_datasource_username};
+				GRANT CREATE VIEW TO ${BC_datasource_username};
+				exec sp_addrolemember 'db_owner', ${BC_datasource_username};
+			</transaction>
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : drop oracle bc db users          
+    ================================= -->
+	<target name="_drop-oracle-bc-users" if="drop-oracle-bc-user" depends="_check-bc-db">
+		<echo>Droping oracle bc db users</echo>		
+		<sql driver="${BC_datasource_driver}"
+			 url="${BC_datasource_url}"
+			 userid="${BC_datasource_adminuser}"
+			 password="${BC_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">				
+				<transaction>
+					DROP USER ${BC_datasource_username} cascade;
+				</transaction>				
+		</sql>					
+	</target>
+
+	<!-- ================================= 
+		target : drop sqlserver bc user          
+       ================================= -->
+	<target name="_drop-sqlserver-bc-user" if="drop-sqlserver-bc-user" depends="_check-bc-db">
+		<sql driver="${BC_datasource_driver}"
+		     url="${BC_datasource_url}"
+		     userid="${BC_datasource_adminuser}"
+		     password="${BC_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>												
+				DROP SCHEMA ${BC_datasource_username};
+			</transaction>
+			<transaction>												
+				DROP USER ${BC_datasource_username};
+			</transaction>
+		</sql>
+		
+		<sql driver="${BC_datasource_driver}"
+		     url="${BC_datasource_adminurl}"
+		     userid="${BC_datasource_adminuser}"
+		     password="${BC_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				DROP LOGIN ${BC_datasource_username};			
+			</transaction>
+		</sql>		
+	</target>
+	
+	
+	<!-- =================================   
+		target : _check-bwpm-db
+    ================================= -->
+	<target name="_check-bwpm-db" depends="_loadConfig">
+
+		<echo>Checking BWPM db type ${BWPM_datasource_type}</echo>
+					  		
+		<condition property="create-oracle-bwpm-user">
+			<and>
+				<equals arg1="${BWPM_datasource_type}" arg2="oracle" />
+				<isset property="BWPM_datasource_adminuser"/>
+				<isset property="BWPM_datasource_adminpassword"/>
+				<or>
+					<not><equals arg1="${BWPM_datasource_type}" arg2="${TIBCO_datasource_type}"/></not>
+					<not><equals arg1="${BWPM_datasource_url}" arg2="${TIBCO_datasource_url}"/></not>
+					<not><equals arg1="${BWPM_datasource_username}" arg2="${TIBCO_datasource_username}"/></not>					
+				</or>			
+			</and>
+		</condition>
+		
+		<condition property="drop-oracle-bwpm-user">
+			<and>
+				<isset property="create-oracle-bwpm-user"/>											
+			</and>
+		</condition>	
+		
+		<condition property="create-oracle-bwpm-db">
+			<and>
+				<isset property="create-oracle-bwpm-user"/>
+				<isset property="BWPM_datasource_tslocation"/>								
+			</and>
+		</condition>	
+			
+		<condition property="create-sqlserver-bwpm-user">
+			<and>
+				<equals arg1="${BWPM_datasource_type}" arg2="sqlserver" />
+				<isset property="BWPM_datasource_adminuser"/>
+				<isset property="BWPM_datasource_adminpassword"/>
+				<isset property="BWPM_mssql_datasource_instance"/>
+				<isset property="BWPM_datasource_adminurl"/>								
+				<or>
+					<not><equals arg1="${BWPM_datasource_type}" arg2="${TIBCO_datasource_type}"/></not>
+					<not><equals arg1="${BWPM_mssql_datasource_instance}" arg2="${TIBCO_mssql_datasource_instance}"/></not>
+					<not><equals arg1="${BWPM_datasource_username}" arg2="${TIBCO_datasource_username}"/></not>					
+				</or>
+			</and>
+		</condition>
+
+		<condition property="drop-sqlserver-bwpm-user">
+			<and>
+				<isset property="create-sqlserver-bwpm-user"/>											
+			</and>
+		</condition>
+		
+		<condition property="create-sqlserver-bwpm-db">
+			<and>
+				<isset property="create-sqlserver-bwpm-user"/>
+				<isset property="BWPM_datasource_tslocation"/>													
+				<or>
+					<not><equals arg1="${BWPM_datasource_type}" arg2="${TIBCO_datasource_type}"/></not>
+					<not><equals arg1="${BWPM_mssql_datasource_instance}" arg2="${TIBCO_mssql_datasource_instance}"/></not>					
+				</or>
+			</and>
+		</condition>		
+		
+		<!-- Check if user exists -->
+		<if>
+			<equals arg1="${BWPM_datasource_type}" arg2="sqlserver" />
+			<then>
+				<echo message="select 1" file="${validate.sql}" append="false"/>
+			</then>
+			<elseif>
+				<equals arg1="${BWPM_datasource_type}" arg2="oracle" />
+				<then>
+					<echo message="select 1 from dual" file="${validate.sql}" append="false"/>
+				</then>
+			</elseif>
+		</if>
+		
+		<!-- Check if user exists -->
+		<if>
+			<or>
+				<isset property="create-oracle-bwpm-user"/>
+				<isset property="create-sqlserver-bwpm-user"/>				
+			</or>
+			<then>
+				<trycatch>
+					<try>
+						<sql driver="${BWPM_datasource_driver}"
+							 url="${BWPM_datasource_url}"
+							 userid="${BWPM_datasource_username}"
+							 password="${BWPM_datasource_password}"					
+							 classpathref="sql.classpath"
+							 src="${validate.sql}"
+						/>
+						<var name="create-oracle-bwpm-user" unset="true"/>
+						<var name="create-oracle-bwpm-db" unset="true"/>
+						<var name="create-sqlserver-bwpm-user" unset="true"/>
+						<var name="create-sqlserver-bwpm-db" unset="true"/>
+					</try>				
+					<catch>
+						<var name="drop-oracle-bwpm-user" unset="true"/>
+						<var name="drop-sqlserver-bwpm-user" unset="true"/>
+					</catch>
+					<finally>
+						<delete file="${validate.sql}" failonerror="false" quiet="true"/>
+					</finally>
+				</trycatch>
+			</then>
+		</if>
+	</target>
+		
+	<!-- ================================= 
+		target : creating oracle bwpm db          
+    ================================= -->
+	<target name="_create-oracle-bwpm-db" if="create-oracle-bwpm-db" depends="_check-bwpm-db">
+		<echo>Creating oracle bwpm db</echo>		
+		<sql driver="${BWPM_datasource_driver}"
+			 url="${BWPM_datasource_url}"
+			 userid="${BWPM_datasource_adminuser}"
+			 password="${BWPM_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">
+				<transaction>
+					CREATE TABLESPACE "${BWPM_datasource_tablespace_name}" LOGGING  DATAFILE '${BWPM_datasource_tslocation}/${BWPM_datasource_tablespace_name}_0.dbf' SIZE ${BWPM_datasource_tablespace_size} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 64K;
+				</transaction>				
+				<transaction>
+					CREATE TABLESPACE "${BWPM_datasource_indexspace_name}" LOGGING  DATAFILE '${BWPM_datasource_tslocation}/${BWPM_datasource_indexspace_name}_0.dbf' SIZE ${BWPM_datasource_indexspace_size} AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED EXTENT MANAGEMENT LOCAL UNIFORM SIZE 64K;
+				</transaction>				
+		</sql>					
+	</target>
+
+    <!-- ================================= 
+		target : creating oracle bwpm user          
+    ================================= -->
+	<target name="_create-oracle-bwpm-user" if="create-oracle-bwpm-user" depends="_create-oracle-bwpm-db">
+		<echo>Creating oracle bwpm db</echo>		
+		<sql driver="${BWPM_datasource_driver}"
+			 url="${BWPM_datasource_url}"
+			 userid="${BWPM_datasource_adminuser}"
+			 password="${BWPM_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true">				
+				<transaction>
+					CREATE USER ${BWPM_datasource_username} PROFILE "DEFAULT" IDENTIFIED BY "${BWPM_datasource_password}" TEMPORARY TABLESPACE "TEMP" ACCOUNT UNLOCK;
+					ALTER USER ${BWPM_datasource_username} DEFAULT TABLESPACE "${BWPM_datasource_tablespace_name}";
+				</transaction>
+				<transaction>
+					GRANT CONNECT,RESOURCE TO ${BWPM_datasource_username};
+					GRANT CREATE MATERIALIZED VIEW TO ${BWPM_datasource_username};
+					grant create view to ${BWPM_datasource_username};
+				</transaction>
+				<transaction>					
+					GRANT UNLIMITED TABLESPACE TO ${BWPM_datasource_username};
+				</transaction>
+		</sql>					
+	</target>
+
+	<!-- ================================= 
+		target : creating sqlserver bwpm db          
+       ================================= -->
+	<target name="_create-sqlserver-bwpm-db" if="create-sqlserver-bwpm-db" depends="_check-bwpm-db">
+		<echo>Creating sqlserver bwpm db ${BWPM_mssql_datasource_instance}</echo>
+		<sql driver="${BWPM_datasource_driver}"
+		     url="${BWPM_datasource_adminurl}"
+		     userid="${BWPM_datasource_adminuser}"
+		     password="${BWPM_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">
+			<transaction>
+				CREATE DATABASE ${BWPM_mssql_datasource_instance} ON ( NAME = ${BWPM_mssql_datasource_instance}_dat, FILENAME = '${BWPM_datasource_tslocation}\${BWPM_mssql_datasource_instance}.mdf', SIZE = ${BWPM_datasource_dbsize}, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB ) LOG ON ( NAME = ${BWPM_mssql_datasource_instance}_log, FILENAME = '${BWPM_datasource_tslocation}\${BWPM_mssql_datasource_instance}.ldf', SIZE = 5MB, MAXSIZE=UNLIMITED, FILEGROWTH = 5MB );
+				ALTER DATABASE ${BWPM_mssql_datasource_instance} SET ALLOW_SNAPSHOT_ISOLATION ON;
+				ALTER DATABASE ${BWPM_mssql_datasource_instance} SET READ_COMMITTED_SNAPSHOT ON;												
+			</transaction>			
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : creating sqlserver bwpm user          
+       ================================= -->
+	<target name="_create-sqlserver-bwpm-user" if="create-sqlserver-bwpm-user" depends="_create-sqlserver-bwpm-db">
+
+		<sql driver="${BWPM_datasource_driver}"
+		     url="${BWPM_datasource_adminurl}"
+		     userid="${BWPM_datasource_adminuser}"
+		     password="${BWPM_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				CREATE LOGIN ${BWPM_datasource_username} WITH PASSWORD = '${BWPM_datasource_password}', DEFAULT_DATABASE=${BWPM_mssql_datasource_instance}, CHECK_POLICY=OFF;
+				ALTER  LOGIN ${BWPM_datasource_username} WITH PASSWORD = '${BWPM_datasource_password}', DEFAULT_DATABASE=${BWPM_mssql_datasource_instance}, CHECK_POLICY=OFF;
+			</transaction>
+		</sql>
+
+		<sql driver="${BWPM_datasource_driver}"
+		     url="${BWPM_datasource_url}"
+		     userid="${BWPM_datasource_adminuser}"
+		     password="${BWPM_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>								
+				CREATE USER ${BWPM_datasource_username} FOR LOGIN ${BWPM_datasource_username} WITH DEFAULT_SCHEMA = ${BWPM_datasource_username};
+				ALTER USER ${BWPM_datasource_username} WITH LOGIN = ${BWPM_datasource_username}, DEFAULT_SCHEMA = ${BWPM_datasource_username};
+				CREATE SCHEMA ${BWPM_datasource_username} AUTHORIZATION ${BWPM_datasource_username};
+				ALTER AUTHORIZATION ON SCHEMA::${BWPM_datasource_username} TO ${BWPM_datasource_username};
+			</transaction>
+			<transaction>
+				GRANT CONNECT TO ${BWPM_datasource_username};
+				GRANT CREATE TABLE TO ${BWPM_datasource_username};
+				GRANT CREATE PROCEDURE TO ${BWPM_datasource_username};
+				GRANT CREATE VIEW TO ${BWPM_datasource_username};
+				exec sp_addrolemember 'db_owner', ${BWPM_datasource_username};
+			</transaction>
+		</sql>
+	</target>
+	
+	<!-- ================================= 
+		target : drop oracle bwpm db users          
+    ================================= -->
+	<target name="_drop-oracle-bwpm-users" if="drop-oracle-bwpm-user" depends="_check-bwpm-db">
+		<echo>Droping oracle bwpm db users</echo>		
+		<sql driver="${BWPM_datasource_driver}"
+			 url="${BWPM_datasource_url}"
+			 userid="${BWPM_datasource_adminuser}"
+			 password="${BWPM_datasource_adminpassword}"
+			 classpathref="sql.classpath"
+			 autocommit="true"
+			 onerror="continue">				
+				<transaction>
+					DROP USER ${BWPM_datasource_username} cascade;
+				</transaction>				
+		</sql>					
+	</target>
+
+	<!-- ================================= 
+		target : drop sqlserver bwpm user          
+       ================================= -->
+	<target name="_drop-sqlserver-bwpm-user" if="drop-sqlserver-bwpm-user" depends="_check-bwpm-db">
+		<sql driver="${BWPM_datasource_driver}"
+		     url="${BWPM_datasource_url}"
+		     userid="${BWPM_datasource_adminuser}"
+		     password="${BWPM_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>												
+				DROP SCHEMA ${BWPM_datasource_username};
+			</transaction>
+			<transaction>												
+				DROP USER ${BWPM_datasource_username};
+			</transaction>
+		</sql>
+		
+		<sql driver="${BWPM_datasource_driver}"
+		     url="${BWPM_datasource_adminurl}"
+		     userid="${BWPM_datasource_adminuser}"
+		     password="${BWPM_datasource_adminpassword}"
+		     classpathref="sql.classpath"
+		     autocommit="true"
+		     onerror="continue">			
+			<transaction>				
+				DROP LOGIN ${BWPM_datasource_username};			
+			</transaction>
+		</sql>		
+	</target>
+</project>

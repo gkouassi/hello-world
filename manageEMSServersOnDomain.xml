@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<!-- ====================================================================== 
+     22 févr. 07 10:48:43                                                        
+
+     project  : SOFTInstalller
+     description : Ajout/Maj/Suppression des serveurs EMS au domaine TIBCO
+                   
+     fxbrun                                                                
+     ====================================================================== -->
+<project name="SOFTInstalller" default="addEmsServers" basedir="..">
+    			
+	 <!-- include task definition -->
+	 <import file="${basedir}/common/taskdef-scripts.xml"/>
+
+	 <!-- include install definition -->
+	 <import file="${basedir}/common/scripts_definition.xml"/>
+
+     <!-- include filter definition -->
+     <import file="${basedir}/common/filters.xml"/>
+	
+      <!-- ================================= 
+	        addEmsServers target   
+       ================================= -->
+     <target name="addEmsServers" depends="_addJmsDomToDomain,_addJmsAppToDomain"/>
+
+	<!-- ================================= 
+	        updateEmsServers target   
+       ================================= -->
+     <target name="updateEmsServers" depends="_updateJmsDomOnDomain,_updateJmsAppOnDomain,_export_domain_config"/>
+
+     <!-- ================================= 
+	        removeEmsServers target   
+       ================================= -->
+     <target name="removeEmsServers" depends="_removeJmsAppFromDomain,_removeJmsDomFromDomain"/>
+
+
+    <!-- ================================= 
+          target: _loadConfig
+      ================================= -->
+    <target name="_loadConfigInit" depends="_loadEnvironement">
+	
+    	<!-- same server -->
+    	<condition property="domIsApp">		
+			<equals arg1="${EMS_address}" arg2="${TRA_domain_ems_adress}"/>
+		</condition>	    	
+    	
+    	<!-- do create dom server -->
+    	<condition property="doCreateDOMServer">	
+    	 	<and>
+    	 		<isLocalIpAddress address="${EMS_DOM_host}"/>  
+    	 		<not><istrue value="${domIsApp}"/></not>
+    	 	</and>
+      	 </condition>    	
+      	<condition property="doCreateDOMServerService">	
+      	    <and>
+      	    	<istrue value="${doCreateDOMServer}"/>
+       	    	<isset property="expl.os.template.dir"/>
+       	    	<isset property="isUnix"/>    	    	
+       	    </and>
+       	</condition>
+    	    	
+       	<!-- do create app server -->
+       	 <condition property="doCreateAPPServer">	
+       	 	<isLocalIpAddress address="${EMS_APP_host}"/>    	 	
+       	 </condition>
+       	<condition property="doCreateAPPServerService">	
+       	    <and>
+      	    	<istrue value="${doCreateAPPServer}"/>
+       	    	<isset property="expl.os.template.dir"/>
+       	    	<isset property="isUnix"/>   
+       	    </and>
+       	</condition>
+    				        		
+		<var name="tibco_ems_executable_converted" unset="true"/>
+	        <pathconvert property="tibco_ems_executable_converted">
+			<path location="${EMS_executable}" />
+		</pathconvert>
+		<var name="EMS_executable" value="${tibco_ems_executable_converted}"/> 
+	
+		<var name="config_converted" unset="true"/>        	
+		<pathconvert property="config_converted">
+			<path location="${EMS_DOM_CONFIG_FILE}" />
+		</pathconvert>
+		<var name="EMS_DOM_CONFIG_FILE" value="${config_converted}"/>
+
+		<var name="config_converted" unset="true"/>        	
+		<pathconvert property="config_converted">
+			<path location="${EMS_APP_CONFIG_FILE}" />
+		</pathconvert>
+		<var name="EMS_APP_CONFIG_FILE" value="${config_converted}"/>		       	
+	   
+    </target>
+	
+	<!-- ================================= 
+          target: loadConfig              
+         ================================= -->
+    <target name="_loadConfig" depends="_loadConfigInit,define_filters"/> 
+    	
+    <!-- ================================= 
+          target: addJmsDomToDomain              
+        ================================= -->
+    <target name="_addJmsDomToDomain" depends="_loadConfig" if="doCreateDOMServer">		
+    	
+    	<!-- convert -->   	    	    	
+        
+		<echo message="TIBCO EMS executable is ${EMS_executable}" level="info"/>
+	    	  	
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}/${EMS_DOM_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/ems"/>
+    		<filterset refid="filters.domains"/>
+    		<filterset refid="filters.ems"/>     		
+    		<filterset refid="filters.ems.dom"/>
+    	</copy>
+    	
+    	<!-- invoke tibco cmdline tool -->
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+    	    <arg line="-cmdFile '${tmpDir}'/AddJMSServer.xml -verbose"/>
+    	</exec>    
+			
+	    	    	    		
+		<!-- clean -->
+    	<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>
+    	
+    </target>	    	
+    
+    <!-- ================================= 
+          target: _addJmsAppToDomain              
+         ================================= -->
+    <target name="_addJmsAppToDomain" depends="_loadConfig" if="doCreateAPPServer">		
+    	    	    	    	    	      		 
+		<echo message="TIBCO EMS executable is ${EMS_executable}" level="info"/>
+	
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}/${EMS_APP_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/ems"/>
+    		<filterset refid="filters.domains"/> 
+    		<filterset refid="filters.ems"/>   		
+    		<filterset refid="filters.ems.app"/>
+    	</copy>
+    	
+    	<!-- invoke tibco cmdline tool  -->
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+    	    <arg line="-cmdFile '${tmpDir}'/AddJMSServer.xml -verbose"/>
+    	</exec>    		
+	    	    	    		
+		<!-- clean -->
+    	<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>
+    	
+    </target>		    
+
+
+ 	<!-- ================================= 
+          target: _updateJmsDomOnDomain
+        ================================= -->
+    <target name="_updateJmsDomOnDomain" depends="_loadConfig" if="doCreateDOMServer">		
+    	    	
+		<echo message="TIBCO EMS executable is ${EMS_executable}" level="info"/>
+	    	  	
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}/${EMS_DOM_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/ems"/>
+    		<filterset refid="filters.domains"/>
+    		<filterset refid="filters.ems"/>     		
+    		<filterset refid="filters.ems.dom"/>
+    	</copy>
+    	
+    	<!-- invoke tibco cmdline tool -->
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+    	    <arg line="-cmdFile '${tmpDir}'/UpdateJMSServer.xml -verbose"/>
+    	</exec>    
+				    	    	    		
+		<!-- clean -->
+    	<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>
+    	
+    </target>	    	
+    
+    <!-- ================================= 
+          target: _updateJmsAppOnDomain
+         ================================= -->
+    <target name="_updateJmsAppOnDomain" depends="_loadConfig" if="doCreateAPPServer">		
+    	    	    	    	    	      	
+		<echo message="TIBCO EMS executable is ${EMS_executable}" level="info"/>
+	
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}/${EMS_APP_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/ems"/>
+    		<filterset refid="filters.domains"/> 
+    		<filterset refid="filters.ems"/>   		
+    		<filterset refid="filters.ems.app"/>
+    	</copy>
+    	
+    	<!-- invoke tibco cmdline tool  -->
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="true">
+    	    <arg line="-cmdFile '${tmpDir}'/UpdateJMSServer.xml -verbose"/>
+    	</exec>    		
+	    	    	    		
+		<!-- clean -->
+    	<delete dir="${tmpDir}" deleteonexit="true" failonerror="true"/>
+    	
+    </target>
+
+     <!-- ================================= 
+          target: _removeJmsDomFromDomain
+     ================================= -->
+    <target name="_removeJmsDomFromDomain" depends="_loadConfig" if="doCreateDOMServer">		
+    	    	
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}/${EMS_DOM_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/ems"/>
+    		<filterset refid="filters.domains"/>    		
+    		<filterset refid="filters.ems.dom"/>
+    	</copy>
+    	
+    	<!-- invoke tibco cmdline tool -->
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="false">
+    	    <arg line="-cmdFile '${tmpDir}'/RemoveJMSServer.xml -verbose"/>
+    	</exec>    		
+    	
+    	<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+    	
+    </target>
+    
+    <!-- ================================= 
+          target: removeJmsAppFromDomain
+         ================================= -->
+    <target name="_removeJmsAppFromDomain" depends="_loadConfig" if="doCreateAPPServer">		
+    	    	
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}/${EMS_APP_PortNumber}"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<copy todir="${tmpDir}" overwrite="true"> 
+    		<fileset dir="${templates.dir}/ems"/>
+    		<filterset refid="filters.domains"/>    		
+    		<filterset refid="filters.ems.app"/>
+    	</copy>
+    	
+    	<!-- invoke tibco cmdline tool -->
+    	<exec dir="${tibco_tra_bin}" executable="${tibco_tra_bin}/domainutilitycmd" spawn="false" failonerror="false">
+    	    <arg line="-cmdFile '${tmpDir}'/RemoveJMSServer.xml -verbose"/>
+    	</exec>    		
+    	
+    	<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+    	
+    </target>		    	
+</project>

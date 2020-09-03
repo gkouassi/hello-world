@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+		======================================================================
+		22 févr. 07 20:25:00 project : SOFT Installer 
+		description : Set Filters
+		EM_* : defined in domain propertie file 
+		TRA_* : defined in domain propertie file 
+		tibco_* : defined in tibco product property file 
+		Gkouassi
+		======================================================================
+	-->
+<project name="filters_definition">
+
+	<target name="define_filters">
+		<!-- change Init Domain script -->
+		<filterset id="filters.domains">
+			<filter token="domain" value="${TRA_domain}" />
+			<filter token="domain.host" value="${TRA_domain_host}" />
+			<filter token="domain.host.vip" value="${TRA_domain_host_vip}" />
+			<filter token="domain.host.islogical" value="${TRA_domain_host_islogical}" />			
+			<filter token="domain.user" value="${TRA_domain_user}" />
+			<filter token="domain.passwd" value="${TRA_domain_password}" />
+			<filter token="administrator.home" value="${tibco_administrator_dir}" />
+			<filter token="domain.encoding" value="${TRA_domain_encoding}" />
+			<filter token="domain.dir" value="${TRA_domain_dir}" />
+			<filter token="domain.tra.dir" value="${TRA_domain_tra_dir}" />
+			<filter token="domain.admin.dir" value="${TRA_domain_admin_dir}" />
+			<filter token="domain.rv.deamon" value="${TRA_domain_rv_deamon}" />
+			<filter token="domain.rv.network" value="${TRA_domain_rv_network}" />
+			<filter token="domain.rv.service" value="${TRA_domain_rv_service}" />
+			<filter token="domain.hawk.deamon" value="${TRA_domain_hawk_deamon}" />
+			<filter token="domain.hawk.network" value="${TRA_domain_hawk_network}" />
+			<filter token="domain.hawk.service" value="${TRA_domain_hawk_service}" />
+			<filter token="domain.http.port" value="${TRA_domain_http_port}" />
+			<filter token="domain.ajp.port" value="${TRA_domain_ajp_port}" />
+			<filter token="domain.shutdown.port" value="${TRA_domain_shutdown_port}" />
+			<filter token="domain.warp.port" value="${TRA_domain_warp_port}" />
+			
+			<!-- ajout EMS -->
+			<filter token="domain.db.url" value="${TIBCO_datasource_url}" />
+			<filter token="domain.db.driver" value="${TIBCO_datasource_driver}" />
+			<filter token="domain.db.user" value="${TIBCO_datasource_username}" />
+			<filter token="domain.db.password" value="${TIBCO_datasource_password}" />
+			
+			<filter token="domain.ems.url" value="${EMS_DOM_factoryUrl}" />
+			<filter token="domain.ems.user" value="${TRA_domain_ems_user}" />
+			<filter token="domain.ems.password" value="${TRA_domain_ems_passwd}" />
+			
+			<!-- ajout MFT -->
+			<filter token="domain.mft.agent.deployment.dir" value="${tibco_mftagent_deployment_dir}" />
+			<filter token="domain.mft.agent.name" value="${TIBCO_hub_peerAgent}" />
+			
+			<!-- ajout change password -->
+			<filter token="domain.user.old" value="${TRA_domain_user_old}" />
+			<filter token="domain.password.old" value="${TRA_domain_password_old}" />
+		</filterset>				
+
+		<!-- change Init JMS script -->
+		<filterset id="filters.ems">		
+			<filter token="ems.executable" value="${EMS_executable}" />
+			<filter token="ems.admin.executable" value="${EMS_admin_executable}" />			
+			<filter token="ems.version" value="${tibco_ems_version}" />			
+			<filter token="ems.os.extension" value="${EMS_OSExtension}" />
+		</filterset>
+		
+		<!-- change Init JMS script -->
+		<filterset id="filters.ems.app">
+			<filter token="ems.server.name" value="${EMS_APP_server}" />
+			<filter token="ems.url" value="${EMS_APP_factoryUrl}" />
+			<filter token="ems.ssl.url" value="${EMS_APP_factorySSLUrl}" />
+			<filter token="ems.user" value="${EMS_APP_admin_user}" />
+			<filter token="ems.password" value="${EMS_APP_admin_passwd}" />
+			<filter token="ems.server.password" value="${EMS_APP_password}" />
+			<filter token="ems.addr" value="${EMS_APP_host}" />
+			<filter token="ems.port" value="${EMS_APP_PortNumber}" />			
+			<filter token="ems.config" value="${EMS_APP_CONFIG_FILE}" />			
+			<filter token="ems.adress" value="${EMS_address}" />
+			<filter token="ems.maxbyte" value="${EMS_APP_maxBytes}" />
+			<filter token="ems.flowcontrol" value="${EMS_APP_flowControl}" />
+			<filter token="ems.route.name" value="${EMS_APP_routeName}" />
+			<filter token="ems.routed.domain" value="${EMS_APP_routedDomainName}" />
+			<filter token="ems.route.url" value="${EMS_APP_routeUrl}" />			
+			<filter token="ems.store.meta.size" value="${EMS_APP_store_meta_size}" />
+			<filter token="ems.store.nonfailsafe.size" value="${EMS_APP_store_async_size}" />
+			<filter token="ems.store.failsafe.size" value="${EMS_APP_store_sync_size}" />
+			<!-- guest -->
+			<filter token="ems.guest.user" value="${EMS_APP_guest_user}" />
+			<filter token="ems.guest.password" value="${EMS_APP_guest_password}" />				
+			<!-- BC -->
+			<filter token="bc.responder.request.queue" value="${BC_responder_request_queue}" />				
+		</filterset>
+		
+		<!-- change Init JMS script -->
+		<filterset id="filters.ems.dom">
+			<filter token="ems.server.name" value="${EMS_DOM_server}" />
+			<filter token="ems.url" value="${EMS_DOM_factoryUrl}" />
+			<filter token="ems.ssl.url" value="${EMS_DOM_factorySSLUrl}" />
+			<filter token="ems.user" value="${TRA_domain_ems_user}" />
+			<filter token="ems.password" value="${TRA_domain_ems_passwd}" />
+			<filter token="ems.server.password" value="${EMS_DOM_password}" />
+			<filter token="ems.addr" value="${EMS_DOM_host}" />
+			<filter token="ems.port" value="${EMS_DOM_PortNumber}" />			
+			<filter token="ems.config" value="${EMS_DOM_CONFIG_FILE}" />			
+			<filter token="ems.adress" value="${TRA_domain_ems_adress}" />
+			<filter token="ems.maxbyte" value="${EMS_DOM_maxBytes}" />
+			<filter token="ems.flowcontrol" value="${EMS_DOM_flowControl}" />
+			<filter token="ems.route.name" value="${EMS_DOM_routeName}" />
+			<filter token="ems.routed.domain" value="${EMS_DOM_routedDomainName}" />
+			<filter token="ems.route.url" value="${EMS_DOM_routeUrl}" />
+			<filter token="ems.store.meta.size" value="${EMS_DOM_store_meta_size}" />
+			<filter token="ems.store.nonfailsafe.size" value="${EMS_DOM_store_async_size}" />
+			<filter token="ems.store.failsafe.size" value="${EMS_DOM_store_sync_size}" />			
+		</filterset>
+		
+		
+		<!-- change Init JMS script -->
+		<filterset id="filters.ems.fom">
+			<filter token="ems.server.name" value="${EMS_FOM_server}" />
+			<filter token="ems.url" value="${EMS_FOM_factoryUrl}" />
+			<filter token="ems.ssl.url" value="${EMS_FOM_factorySSLUrl}" />
+			<filter token="ems.user" value="${EMS_FOM_admin_user}" />
+			<filter token="ems.password" value="${EMS_FOM_admin_passwd}" />
+			<filter token="ems.server.password" value="${EMS_FOM_passwd}" />
+			<filter token="ems.addr" value="${EMS_FOM_host}" />
+			<filter token="ems.port" value="${EMS_FOM_PortNumber}" />			
+			<filter token="ems.config" value="${EMS_FOM_CONFIG_FILE}" />			
+			<filter token="ems.adress" value="${EMS_FOM_address}" />
+			<filter token="ems.maxbyte" value="${EMS_FOM_maxBytes}" />
+			<filter token="ems.flowcontrol" value="${EMS_FOM_flowControl}" />
+			<filter token="ems.store.meta.size" value="${EMS_FOM_store_meta_size}" />
+			<filter token="ems.store.nonfailsafe.size" value="${EMS_FOM_store_async_size}" />
+			<filter token="ems.store.failsafe.size" value="${EMS_FOM_store_sync_size}" />			
+		</filterset>
+
+		<filterset id="filters.exploitation">
+			<filter token="tibco.install" value="${TIBCO_ROOT}" />
+			<filter token="os.user" value="${TIBCO_USER}" />
+			<filter token="user.home" value="${user.home}" />
+			<filter token="tibco.logs" value="${TIBCO_LOGS}" />
+			<filter token="domain.admin.tmpdir" value="${TIBCO_ADMIN_TMP_EXECDIR}" />
+			<filter token="domain.tra.tmpdir" value="${TIBCO_TRA_TMP_EXECDIR}" />	
+			<filter token="cmd.os.extension" value="${EMS_OSExtension}" />	
+			<!-- Ajout CFT -->
+			<filter token="logical.domain" value="${conf}" />
+			<filter token="cft.scripts.dir" value="${CFT_SCRIPT_DIR}" />
+			<filter token="cft.log.dir" value="${CFT_LOG_DIR}" />
+			<!-- modif scripts -->
+			<filter token="EXPL_SCRIPT_DIR" value="${EXPL_SCRIPT_DIR}" />
+			<filter token="EXPL_SERVICES_DIR" value="${EXPL_SERVICES_DIR}" />			
+			<filter token="JRE_HOME" value="${JAVA_HOME}" />
+			<filter token="TIBCO_HAWK_DIR" value="${TIBCO_HAWK_DIR}" />
+			<filter token="TIBCO_CONFIG_DIR" value="${TIBCO_CONFIG_DIR}" />			
+		</filterset>
+		
+		<filterset id="filters.mft.agent">
+			<filter token="tibco_root" value="${TIBCO_ROOT}"/>	
+			<filter token="tibco_jre" value="${JAVA_HOME}"/>
+			<filter token="tibco_jre_lib_path" value="${JVM_LIB_PATH}"/>
+			<filter token="tibco_jre_lib_dir" value="${JVM_LIB_DIR}"/>
+			<filter token="tibco_jre_server_lib_dir" value="${JVM_LIB_SERVER_DIR}"/>			
+			<filter token="os.name" value="${os.name}" />
+			<filter token="os.arch" value="${os.arch}" />
+					
+			<filter token="tibco_mftagent_dir" value="${tibco_mftagent_dir}" />
+			<filter token="tibco_mftagent_deployment_dir" value="${tibco_mftagent_deployment_dir}" />			
+			<filter token="tibco_mftagent_dir_converted" value="${tibco_mftagent_dir_converted}" />
+			<filter token="tibco_mftagent_deployment_dir_converted" value="${tibco_mftagent_deployment_dir_converted}" />			
+			
+			<filter token="TIBCO_hub_peerAgentInstance" value="${TIBCO_hub_peerAgentInstance}" />
+			<filter token="TIBCO_hub_peerAgent" value="${TIBCO_hub_peerAgent}" />			
+			<filter token="TIBCO_hub_peerAgentInstance_agent_cmd" value="${TIBCO_hub_peerAgentInstance_agent_cmd}" />
+			<filter token="TIBCO_hub_peerAgentInstance_agent_tra" value="${TIBCO_hub_peerAgentInstance_agent_tra}" />
+			<filter token="TIBCO_hub_peerAgentInstance_cmd" value="${TIBCO_hub_peerAgentInstance_cmd}" />
+			<filter token="TIBCO_hub_peerAgentInstance_cli_tra" value="${TIBCO_hub_peerAgentInstance_cli_tra}" />
+			
+			<filter token="MFT_domain_dir" value="${MFT_domain_dir}" />	
+			<filter token="MFT_mftserver_port" value="${MFT_mftserver_port}" />	
+			<filter token="MFT_mftserver_host" value="${MFT_mftserver_host}" />	
+			<filter token="MFT_mfthubagent_host" value="${MFT_mfthubagent_host}" />
+			<filter token="MFT_mftagenthub_port" value="${MFT_mftagenthub_port}" />
+			<filter token="MFT_mfthubagent_socket_port" value="${MFT_mfthubagent_socket_port}" />
+			<filter token="MFT_mfthubagent_inbox_dir" value="${MFT_mfthubagent_inbox_dir}" />
+			<filter token="MFT_mfthubagent_outbox_dir" value="${MFT_mfthubagent_outbox_dir}" />	
+			<filter token="MFT_mfthubagent_tmp_dir" value="${MFT_mfthubagent_tmp_dir}" />
+			<filter token="MFT_hubagent_windows_service" value="${MFT_hubagent_windows_service}" />
+			
+		</filterset>
+		
+		
+		<filterset id="filters.bc">
+			<filter token="BC_httpserver_port" value="${BC_http_port}" />
+			<filter token="BC_Interior_exec_dir" value="${BC_Interior_exec_dir}" />
+			<filter token="BC_Interior_script" value="${BC_Interior_script}" />			
+			<filter token="BC_gateway_executable_dir" value="${BC_gateway_executable_dir}" />	
+			<filter token="BC_gateway_tra" value="${BC_gateway_tra}" />			
+		</filterset>					
+
+		<filterset id="filters.soft">			
+			<filter token="soft.windows.svcname" value="${SOFTMonitor_windows_serviceName}" />
+			<filter token="soft.unix.svcname" value="${SOFTMonitor_unix_serviceName}" />			
+	 		<filter token="soft.nodename" value="${SOFTMonitor_nodeName}" />
+			<filter token="soft.xmx" value="${SOFTMonitor_heapsize}" />			
+			<filter token="soft.install.dir" value="${SOFTMonitor_executable_dir}" />
+			<filter token="soft.log.dir" value="${TIBCO_LOGS}/soft" />
+			<filter token="soft.user" value="${TIBCO_USER}" />
+			
+			<filter token="soft.datasource.url" value="${SOFTMonitor_datasource_url}" />
+			<filter token="soft.datasource.username" value="${SOFTMonitor_datasource_username}" />
+			<filter token="soft.datasource.password" value="${SOFTMonitor_datasource_password}" />
+			<filter token="soft.datasource.driver" value="${SOFTMonitor_datasource_driver}" />
+			<filter token="soft.db.type" value="${SOFTMonitor_datasource_type}" />
+			<filter token="soft.db.oracle.version" value="${SOFTMonitor_datasource_oracle_version}" />
+			<filter token="soft.db.admin.user" value="${SOFTMonitor_datasource_adminuser}" />
+			<filter token="soft.db.admin.password" value="${SOFTMonitor_datasource_adminpassword}" />
+			<filter token="soft.db.tablespace.location" value="${SOFTMonitor_datasource_tslocation}" />
+			<filter token="soft.db.h2baseDir.location" value="${SOFTMonitor_datasource_localdir}" />
+						
+			<filter token="soft.channel.maxsize" value="${SOFTMonitor_channel_maxsize}" />
+			<filter token="soft.bind.address" value="${SOFTMonitor_host}" />			
+			<filter token="soft.port.offset" value="${SOFTMonitor_port_offset}" />
+			<filter token="soft.swagger.http.host" value="${SOFTMonitor_swagger_host}" />
+			<filter token="soft.swagger.http.port" value="${SOFTMonitor_swagger_port}" />
+			
+			<filter token="soft.cluster.name" value="${SOFTMonitor_cluster_name}" />
+			<filter token="soft.cluster.activate" value="${SOFTMonitor_cluster_activate}" />
+			<filter token="soft.cluster.console" value="${SOFTMonitor_cluster_console}" />
+			<filter token="soft.cluster.bind_addr" value="${SOFTMonitor_cluster_bind_addr}" />			
+			<filter token="soft.cluster.overrideactivepassive" value="${SOFTMonitor_cluster_overrideActivePassiveMode}" />
+			<filter token="soft.cluster.doNotDistributeChannel" value="${SOFTMonitor_cluster_doNotDistributeChannel}" />			
+			<filter token="soft.cluster.protocol" value="${SOFTMonitor_cluster_protocol}" />
+			<filter token="soft.cluster.udp.mcast_port" value="${SOFTMonitor_cluster_udp_mcast_port}" />
+			<filter token="soft.cluster.tcp.port" value="${SOFTMonitor_cluster_tcp_port}" />
+			<filter token="soft.cluster.tcp.initial_hosts" value="${SOFTMonitor_cluster_tcp_initial_hosts}" />
+			
+			<filter token="soft.ems.url" value="${SOFTMonitor_ems_url}" />
+			<filter token="soft.ems.user" value="${SOFTMonitor_ems_user}" />
+			<filter token="soft.ems.password" value="${SOFTMonitor_ems_password}" />
+			<filter token="soft.ems.jndiContextFactory" value="${SOFTMonitor_initCtxClass}" />
+			<filter token="soft.ems.jndiContextPkgs" value="${SOFTMonitor_initCtxPkgs}" />			
+			<filter token="soft.ems.queueConnexionFactory" value="${SOFTMonitor_queueConnexionFactoryJNDIName}" />
+			<filter token="soft.ems.topicConnexionFactory" value="${SOFTMonitor_topicConnexionFactoryJNDIName}" />
+			<filter token="soft.ems.generiConnexionFactory" value="${SOFTMonitor_genericConnexionFactoryJNDIName}" />
+			<filter token="soft.ems.serverQueueConnexionFactory" value="${SOFTMonitor_serverQueueConnexionFactoryJNDIName}"/>
+			<filter token="soft.ems.serverTopicConnexionFactory" value="${SOFTMonitor_serverTopicConnexionFactoryJNDIName}" />
+			<filter token="soft.ems.queue" value="${SOFTMonitor_queueJNDIName}" />
+			<filter token="soft.ems_topic" value="${SOFTMonitor_topicJNDIName}" />
+			<filter token="soft.ems.synchqueue" value="${SOFTMonitor_synchQueueJNDIName}" />
+			<filter token="soft.ems.volatilequeue" value="${SOFTMonitor_volatileQueueJNDIName}" />
+			<filter token="soft.ems.trafficManagerQueue" value="${SOFTMonitor_trafficManagerQueueJNDIName}" />
+			<filter token="soft.ems.event.queue" value="${SOFTMonitor_eventQueueJNDIName}" />
+		</filterset>
+
+		<!-- Filtersets for BWPM  -->
+		<filterset id="filters.bwpm">
+			<filter token="JAVA.HOME.DIR" value="${JAVA_HOME}" />
+			<filter token="bwpm.windows.svcname" value="${BWPM_windows_serviceName}" />
+			<filter token="bwpm.unix.svcname" value="${BWPM_unix_serviceName}" />				 		
+			
+			<filter token="jvmargs.permsize" value="${BWPM_max_permsize}" />			
+			<filter token="jvmargs.xms" value="${BWPM_init_heapsize}" />
+			<filter token="jvmargs.xmx" value="${BWPM_max_heapsize}" />
+			<filter token="jvm.ext.options" value="${BWPM_jvm_options}" />
+			
+			<filter token="bwpm.log.dir" value="${TIBCO_LOGS}/bwpm" />						
+			<filter token="bwpm.user" value="${TIBCO_USER}" />
+			
+			<filter token="tomcat.bwpm.root.dir" value="${BWPM_executable_dir}" />
+			<filter token="tomcat.bwpm.bin.dir" value="${BWPM_executable_bin_dir}" />
+			
+			<filter token="tomcat.bwpm.http.port" value="${BWPM_http_port}" />
+			<filter token="tomcat.bwpm.stop.port" value="${BWPM_http_stop_port}" />
+			<filter token="tomcat.bwpm.redirect.port" value="${BWPM_http_redirect_port}" />
+			<filter token="tomcat.bwpm.ajp.port" value="${BWPM_http_ajp_port}" />
+			
+			<filter token="tibco.bwpm.webapp.context" value="${BWPM_webapp_context}" />			
+			<filter token="tibco.bwpm.webapp.dir" value="${tibco_bwpm_install_dir}" />
+		</filterset>
+		
+		<!-- Filtersets DB scripts  -->
+		<filterchain id="dbscript.filters">
+		  <tokenfilter>
+			<replaceregex pattern="spool" replace="--" flags="gi" />
+			<replaceregex pattern="define" replace="--" flags="gi" />
+			<replaceregex pattern="prompt" replace="--" flags="gi" />
+						
+			<replaceregex pattern="&amp;TAB_LOB" replace="${TAB_LOB}" flags="gi" />
+			<replaceregex pattern="&amp;TAB_SMALL" replace="${TAB_SMALL}" flags="gi" />
+			<replaceregex pattern="&amp;TAB_BIG" replace="${TAB_BIG}" flags="gi" />						
+			<replaceregex pattern="&amp;TAB_IDX_BIG" replace="${TAB_IDX_BIG}" flags="gi" />
+			<replaceregex pattern="&amp;TAB_IDX_SMALL" replace="${TAB_IDX_SMALL}" flags="gi" />
+			
+			<replaceregex pattern="&amp;ppctfreewip" replace="${soft_db_ppctfreewip}" flags="gi" />
+			<replaceregex pattern="&amp;ppctusedwip" replace="${soft_db_ppctusedwip}" flags="gi" />
+			<replaceregex pattern="&amp;pinittranswip" replace="${soft_db_inittranswip}" flags="gi" />
+			<replaceregex pattern="&amp;ppctfree" replace="${soft_db_pctfree}" flags="gi" />
+			<replaceregex pattern="&amp;ppctused" replace="${soft_db_pctused}" flags="gi" />
+			<replaceregex pattern="&amp;pinittrans" replace="${soft_db_inittrans}" flags="gi" />
+			<replaceregex pattern="&amp;pmaxtrans" replace="${soft_db_maxtrans}" flags="gi" />
+			<replaceregex pattern="&amp;plogging" replace="${soft_db_logging}" flags="gi" />
+		 </tokenfilter>
+		</filterchain>
+	
+		<!-- Filtersets to generate soft config file -->
+		<filterset id="soft.dbscript.filters">
+			<filter token="soft.ts.lob" value="${TAB_LOB}" />
+			<filter token="soft.ts.ref" value="${TAB_SMALL}" />
+			<filter token="soft.ts.data" value="${TAB_BIG}" />
+			<filter token="soft.ts.idx.data" value="${TAB_IDX_BIG}" />
+			<filter token="soft.ts.idx.ref" value="${TAB_IDX_SMALL}" />
+		</filterset>
+
+		<!-- Filtersets to generate soft deployer installation file -->
+		<pathconvert property="PROJECT_DATA_CONVERTED" targetos="unix">
+			<path location="${PROJECT_DATA_DEFAULT}" />
+		</pathconvert>
+		<filterset id="soft.project.filters">
+			<filter token="PROJECT_DATA" value="${PROJECT_DATA_CONVERTED}" />
+			<filter token="PROJECT_PROFILE" value="${PROJECT_PROFILE}" />	
+			<filter token="MDA_host_public" value="${MDA_host_public}" />
+			<filter token="MDA_port_public" value="${MDA_port_public}" />
+		</filterset>
+
+		<filterset id="filters.bw6">
+			<filter token="tibco.bw6.dir" value="${TIBCO_BW_DIR}" />
+			<filter token="TIBCO_HAWK_DIR" value="${TIBCO_HAWK_DIR}" />
+			<filter token="TIBCO_HAWK_CONFIG_DIR" value="${TIBCO_HAWK_CONFIG_DIR}" />
+			<filter token="tibco.hawk.tea.agent.dir" value="${TIBCO_HAWK_TEA_AGENT_DIR}" />	
+			<filter token="HAWKMonitor_AS_transport_discover_url" value="${HAWKMonitor_AS_transport_discover_url}" />		
+		</filterset>
+	</target>
+</project>

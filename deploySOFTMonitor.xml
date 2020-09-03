@@ -1,0 +1,512 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!-- ====================================================================== 
+     22 févr. 07 10:48:43                                                        
+
+     project  : SOFTInstaller
+     description : deploiement SOFTMonitor
+                   
+     fxbrun                                                                
+     ====================================================================== -->
+<project name="SOFTInstaller" default="deploy" basedir="..">    	
+		
+	 <!-- include task definition -->
+	 <import file="${basedir}/common/taskdef-scripts.xml"/>
+
+	 <!-- include install definition -->
+	 <import file="${basedir}/common/scripts_definition.xml"/>
+
+     <!-- include filter definition -->
+     <import file="${basedir}/common/filters.xml"/>
+
+    <!-- ================================= 
+         target: deploy              
+       ================================= -->
+      <target name="deploy" depends="_deploy,_export_domain_config,_create_services-linux,_create_services-aix,_deploy_hrb"/>
+	
+    <!-- ================================= 
+         target: update
+       ================================= -->
+     <target name="update" depends="_update,_export_domain_config,_create_services-linux,_create_services-aix,_deploy_hrb"/>
+	
+     <!-- ================================= 
+          target: undeploy
+        ================================= -->
+     <target name="undeploy" depends="_undeploy,_undeploy_hrb,_delete_services-unix"/>
+	 	 	
+     <!-- ================================= 
+          target: generate_config_for_output             
+         ================================= -->
+    <target name="generate_config_for_output" depends="_export_config,_export_domain_config">
+	  <delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+    </target>
+
+    <!-- ================================= 
+          target: create-unix-services
+      ================================= -->
+    <target name="create-unix-services" depends="_export_domain_config,_create_services-linux,_create_services-aix,_deploy_hrb"/>
+	    
+	
+	<!-- ================================= 
+	    target: addDomainToMonitor
+	================================= -->
+	<target name="addDomainToMonitor" depends="_loadConfig">
+		<if>
+			<isGreaterThan arg1="${SOFTMonitor_activation_connectionIndex}" arg2="-1"/>
+			<then>
+				<!-- target domain file 
+				<property name="target.properties" value="${user.home}/${logical.target.domain}.properties"/>
+				-->
+				<if>
+					<isset property="updateMonitor"/>
+					<then>
+						<SoftInstallerConfig softInstallerBaseDir="${basedir}" projectPropertiesPrefix="target.props." domainKey="logical.target.domain"/>
+					</then>
+					<else>
+						<SoftInstallerConfig projectPropertiesPrefix="target.props." domainKey="logical.target.domain"/>
+					</else>
+				</if>
+				
+				<!-- replace local config -->
+				<property name="appenedXMLConf" value="${tmpDirConf}/SOFTMonitorAdapterConfig-fragment.xml"/>		
+				<copy file="${soft_templates_dir}/SOFTMonitorAdapterConfig-fragment.xml" tofile="${appenedXMLConf}">
+					<filterset refid="filters.domains"/>
+					<filterset refid="filters.exploitation"/>  
+					<filterset refid="filters.soft"/>  
+				</copy>
+						
+				<!-- check target config -->
+				<property name="targetXMLConf" value="${target.props.SOFTMonitor_executable_dir}/server/conf/SOFTMonitorAdapterConfig.xml"/>
+				<if>
+					<not><available file="${targetXMLConf}"/></not>
+					<then>
+						<fail message="Expected config file ${targetXMLConf} not found"/>				
+					</then>			
+				</if>
+				
+				<!-- init -->
+				<var name="existingConfigName" unset="true"/>
+				<var name="newDomConfigName" unset="true"/>
+							
+				<!-- new conf -->		
+				<var name="previousPosition" value="${SOFTMonitor_activation_connectionIndex}"/>
+				<math result="currentPosition" operand1="${SOFTMonitor_activation_connectionIndex}" operation="+" operand2="1" datatype="int"/>
+				<xmltask source="${appenedXMLConf}" failWithoutMatch="true" report="false" clearbuffers="newDomConfig">
+					<copy path="/connectionParameters" buffer="newDomConfig"/>
+					<copy path="/connectionParameters/@name" property="newDomConfigName"/>
+				</xmltask>
+				
+				<!-- old conf -->
+				<xmltask source="${targetXMLConf}" failWithoutMatch="false" report="false" clearbuffers="existingDomConfig">
+					<copy path="/softAdapterConfig/providerConnection/connectionParameters[${currentPosition}]" buffer="existingDomConfig"/>
+					<copy path="/softAdapterConfig/providerConnection/connectionParameters[${currentPosition}]/@name" property="existingConfigName"/>
+					<copy path="count(/softAdapterConfig/providerConnection/connectionParameters)" property="existingConfigCount"/>
+				</xmltask>
+				
+				<if>
+					<isset property="existingConfigName"/>
+					<then>		
+						<echo message="Replacing ${newDomConfigName} config in ${targetXMLConf} at postion ${currentPosition}" level="info"/>
+						<xmltask source="${targetXMLConf}" failWithoutMatch="true" 
+								 dest="${targetXMLConf}" report="false">
+							<replace path="/softAdapterConfig/providerConnection/connectionParameters[${currentPosition}]" withBuffer="newDomConfig" />					
+						</xmltask>
+					</then>
+					<else>
+						<echo message="Inserting ${newDomConfigName} config in ${targetXMLConf} at position ${currentPosition} : exiting config count : ${existingConfigCount}" level="info"/>
+						<if>
+							<isGreaterThan arg1="${previousPosition}" arg2="0"/>
+							<then>
+								<if>
+									<isGreaterThan arg1="${previousPosition}" arg2="${existingConfigCount}"/>
+									<then>
+										<fail message="Unable to insert ${newDomConfigName} config in ${targetXMLConf} because previous position of new config(${previousPosition}) is greater config size ${existingConfigCount}"/>
+									</then>
+									<else>
+										<xmltask source="${targetXMLConf}" failWithoutMatch="true" 
+												 dest="${targetXMLConf}" report="false">
+											<insert path="/softAdapterConfig/providerConnection/connectionParameters[${previousPosition}]" buffer="newDomConfig" position="after" />					
+										</xmltask>
+									</else>							
+								</if>
+							</then>
+							<else>
+								<xmltask source="${targetXMLConf}" failWithoutMatch="true" 
+										dest="${targetXMLConf}" report="false">
+									<insert path="/softAdapterConfig/providerConnection/jndiName" buffer="newDomConfig" position="after" />					
+							   </xmltask>	
+							</else>
+						</if>
+					</else>
+				</if>
+				
+				<!-- format -->
+				<formatXML inputFile="${targetXMLConf}" />				
+				<delete dir="${tmpDirConf}" deleteonexit="true" failonerror="false"/>		
+			</then>
+			<else>
+				<echo message="No replacement required on SOFTMonitorAdapterConfig" level="info"/>
+			</else>
+		</if>
+	</target>
+		 
+		  
+     <!-- ================================= 
+          target: _loadConfigInit              
+        ================================= -->
+    <target name="_loadConfigInit" depends="_loadEnvironement">    	  	    	    	    	        
+		<!--  used unlocked drivers  -->
+		<if>
+			<contains string="${SOFTMonitor_datasource_driver}" substring="tibcosoftwareinc" casesensitive="false"/>
+			<then>
+				<var name="SOFTMonitor_datasource_driver" value="fr.squareit.soft.jdbc.driver.TibcoUnlockDriver"/>
+			</then>
+		</if>
+		
+		<!--  check installed  -->
+		<available file="${SOFTMonitor_executable_bin_dir}" type="dir" property="soft_server_installed"/>				
+	</target>
+	
+	<!-- ================================= 
+          target: loadConfig              
+         ================================= -->
+    <target name="_loadConfig" depends="_loadConfigInit,define_filters"/> 
+	
+	    
+    <!-- ================================= 
+          target: _deploy
+         ================================= -->
+    <target name="_deploy" depends="_export_config">		            	  
+		<if>
+        	<available file="${softversion_converted}/deploy" type="dir"/>
+        	<then>
+			
+				<if>
+					<isset property="isAIX"/>
+					<then>
+						<!-- add rv dependent version (only for AIX OS because no ldd config or PATH functions) --> 
+						<copy todir="${softversion_converted}/lib/tomcat-ibm" overwrite="true">
+							<fileset dir="${tibco_rv_lib}" includes="tibrvjsd.jar"/>
+							<fileset dir="${tibco_hawk_lib}" includes="tibrvjms.jar"/>
+							<fileset dir="${tibco_hawk_lib}" includes="tibjms.jar"/>
+						</copy>
+					</then>
+        		</if>								
+
+        		<!-- launch deploy -->
+        		<ant antfile="${softversion_converted}/deploy/shared/build-deploy.xml" target="install.tomcat" inheritall="false" dir="${softversion_converted}">
+					<property name="soft.server.type" value="TOMCAT"/>
+					<property file="${softconfig}"/>
+					<property name="soft.preserve.config.adapter" value="false"/>
+					<propertyset>
+						<propertyref name="AS_HOME"/>
+						<propertyref name="TIBCO_RV_DIR"/>
+					</propertyset>					
+				</ant>						
+				<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+
+        	</then>
+        	<else>
+				<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        		<fail message="${softversion_converted} not found"/>
+        	</else>
+        </if>            	    	
+    </target>
+
+    <!-- ================================= 
+         target: create_services-linux              
+     ================================= -->
+   <target name="_create_services-linux" depends="_loadConfig" if="isLinux">	
+   	
+		<!-- make start/stop -->
+    	<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+    	<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${SOFTMonitor_executable_bin_dir}">
+				<include name="softd"/>		
+			</fileset>
+			<mergemapper to="${SOFTMonitor_unix_serviceName}"/>
+    	</copy>
+    		
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SERVICES_DIR}" includes="${SOFTMonitor_unix_serviceName}"/>
+		</chmod>	
+    </target>
+
+   <!-- ================================= 
+         target: create_services-aix
+     ================================= -->
+   <target name="_create_services-aix" depends="_loadConfig" if="isAIX">	
+   	
+		<!-- make start/stop -->
+    	<mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+    	<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${SOFTMonitor_executable_bin_dir}">
+				<include name="softd_AIX"/>		
+			</fileset>
+			<mergemapper to="${SOFTMonitor_unix_serviceName}"/>
+    	</copy>
+    		
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SERVICES_DIR}" includes="${SOFTMonitor_unix_serviceName}"/>
+		</chmod>	
+    </target>
+
+
+     <!-- ================================= 
+         target: _delete_services-unix
+     ================================= -->
+   <target name="_delete_services-unix" depends="_loadConfig" if="isUnix">	   		
+    	<delete file="${EXPL_SERVICES_DIR}/${SOFTMonitor_unix_serviceName}" failonerror="false"/>     	   	
+    </target>
+
+
+   <!-- ================================= 
+          target: _undeploy              
+         ================================= -->
+    <target name="_undeploy" depends="_generate_config" if="soft_server_installed">		            	  
+		<if>
+        	<available file="${softversion_converted}" type="dir"/>
+        	<then>
+        		<!-- launch undeploy -->
+        		<ant antfile="${softversion_converted}/deploy/shared/build-deploy.xml" target="uninstall.soft.tomcat" inheritall="false" dir="${softversion_converted}">
+					<property name="soft.server.type" value="TOMCAT"/>
+					<property file="${softconfig}"/>
+				</ant>
+				<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        	</then>
+        	<else>
+				<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        		<fail message="${softversion_converted} not found"/>
+        	</else>
+        </if>            	    		
+    </target>
+
+     <!-- ================================= 
+          target: _update
+         ================================= -->
+    <target name="_update" depends="_export_config" if="soft_server_installed">		            	  
+		<if>
+			<and>
+				<available file="${softversion_converted}" type="dir"/>
+				<available file="${SOFTMonitor_executable_dir}" type="dir"/>
+			</and>
+        	<then>
+        		<!-- run update domain -->
+        		<var name="logical.target.domain" value="${conf}"/>
+				<var name="updateMonitor" value="true"/>				
+        		<runtarget target="addDomainToMonitor"/>
+			
+        		<!-- launch update -->
+        		<ant antfile="${softversion_converted}/deploy/shared/build-deploy.xml" target="update.soft.tomcat" inheritall="false" dir="${softversion_converted}">
+					<property name="soft.server.type" value="TOMCAT"/>
+					<property file="${softconfig}"/>
+					<property name="soft.preserve.config.adapter" value="true"/>
+					<propertyset>
+						<propertyref name="AS_HOME"/>
+						<propertyref name="TIBCO_RV_DIR"/>
+					</propertyset>
+				</ant>
+			
+        		<!-- delete tmp-->
+				<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>        		
+        	</then>
+        	<else>
+				 <delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        		 <echo message="soft not installed not found" level="warning"/>
+        	</else>
+        </if>            	    	
+    </target>
+
+    <!-- ================================= 
+          target: deploy-referential              
+         ================================= -->
+    <target name="deploy-referential" depends="_generate_config">		            	  
+		<if>
+        	<available file="${softversion_converted}" type="dir"/>
+        	<then>
+        		<!-- launch import -->
+        		<ant antfile="${softversion_converted}/deploy/shared/build-deploy.xml" target="import_ref_data" inheritall="false" dir="${softversion_converted}">
+				<property name="soft.server.type" value="TOMCAT"/>
+				<property name="do.restart.soft" value="y"/>
+				<property file="${softconfig}"/>
+			</ant>
+			
+			<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        	</then>
+        	<else>
+			 <delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        		 <fail message="${softversion_converted} not found"/>
+        	</else>
+        </if>            	    	
+    </target>
+
+	
+	 <!-- ================================= 
+          target: updateSchema
+         ================================= -->
+    <target name="updateSchema" depends="_generate_config">		            	  
+		<if>
+        	<available file="${softversion_converted}" type="dir"/>
+        	<then>
+        		<!-- launch import -->
+        		<ant antfile="${softversion_converted}/deploy/shared/build-deploy.xml" target="update.bdd" inheritall="false" dir="${softversion_converted}">										
+					<property file="${softconfig}"/>
+				</ant>			
+				<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        	</then>
+        	<else>
+				<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        		 <fail message="${softversion_converted} not found"/>
+        	</else>
+        </if>            	    	
+    </target>
+	
+	
+	 <!-- ================================= 
+          target: _deploy_hrb
+         ================================= -->
+    <target name="_deploy_hrb">
+		<if>
+			<and>
+				<available file="${SOFTMonitor_executable_dir}" type="dir"/>
+				<available file="${hawk.templates.dir}" type="dir"/>
+				<available file="${TRA_domain_tra_hrb_dir}" type="dir"/>
+			</and>
+        	<then>
+				<echo message="Deploying SOFTMonitor Hawk Rule Based" level="info"/>
+        		<runtarget target="_deploy_hrb_unix"/>
+				<runtarget target="_deploy_hrb_windows"/>
+        	</then>
+        </if>            	    	
+    </target>
+	
+	<!-- ================================= 
+          target: _deploy_hrb_unix
+         ================================= -->
+    <target name="_deploy_hrb_unix" if="isUnix">
+		<copy todir="${TRA_domain_tra_hrb_dir}" overwrite="true"> 
+			<fileset dir="${hawk.templates.dir}/unix"/>
+			<filterset refid="filters.domains"/>	
+			<filterset refid="filters.exploitation"/>
+			<filterset refid="filters.soft"/>	
+		</copy>     	    	
+    </target>
+	
+	<!-- ================================= 
+          target: _deploy_hrb_windows
+         ================================= -->
+    <target name="_deploy_hrb_windows" if="isWindows">		            	  
+		<copy todir="${TRA_domain_tra_hrb_dir}" overwrite="true"> 
+			<fileset dir="${hawk.templates.dir}/windows"/>
+			<filterset refid="filters.domains"/>	
+			<filterset refid="filters.exploitation"/>
+			<filterset refid="filters.soft"/>	
+		</copy>
+    </target>
+	
+	<!-- ================================= 
+          target: _undeploy_hrb
+         ================================= -->
+    <target name="_undeploy_hrb" if="soft_server_installed">	
+		<For param="rule">
+			<fileset dir="${hawk.templates.dir}">
+				<include name="**/*.hrb" />
+			</fileset>		
+			<sequential>
+				<var name="script.name" unset="true"/>
+				<basename file="@{rule}" property="script.name"/>
+				<delete file="${TRA_domain_tra_hrb_dir}/${script.name}" failonerror="false"/>
+			</sequential>
+		</For>
+	 </target>		
+			
+    <!-- ================================= 
+          target: _generate_config             
+         ================================= -->
+    <target name="_generate_config" depends="_loadConfig">
+	 
+    	<var name="tmpDir" value="${java.io.tmpdir}/${user.name}/SOFTMonitor"/>
+    	<mkdir dir="${tmpDir}"/>
+    	<var name="softconfig" value="${tmpDir}/deploy-${TRA_domain}.properties"/>
+				
+		
+    	<copy file="${soft_monitor_template}"  tofile="${softconfig}" overwrite="true">
+    		<filterset refid="filters.domains"/> 					
+			<filterset refid="filters.soft"/>    
+			<filterset refid="soft.dbscript.filters"/>				
+    	</copy>
+    	
+		<basename file="${SOFT_MONITOR_DIR}" property="softversion"/>    	
+		<echo message="softversion is ${softversion}" level="info"/>
+        	 
+        <pathconvert property="softversion_converted">
+			<path location="${SOFT_MONITOR_DIR}" />
+		</pathconvert>
+		<pathconvert property="softconfig_converted">
+			<path location="${softconfig}" />
+		</pathconvert>
+    </target>
+
+    <!-- ================================= 
+          target: _export_config             
+         ================================= -->
+    <target name="_export_config" depends="_generate_config">		
+		<if>
+			<or>
+				<not><isset property="tibco_confdir"/></not>				
+				<not><available file="${tibco_confdir}" type="dir"/></not>				
+			</or>		
+			<then>
+				<echo message="TIBCO config directory ${tibco_confdir} not found, creating new one" level="warning"/>		
+				<var name="tibco_confdir" value="${TIBCO_ROOT}/config/tibco"/>				
+			</then>
+		</if>			
+	
+    	<mkdir dir="${tibco_confdir}/soft"/>
+	    <copy file="${softconfig}" todir="${tibco_confdir}/soft"/>
+		<basename property="softconfig.name" file="${softconfig}"/>
+		<pathconvert property="softconfig.full.path">
+			<path location="${tibco_confdir}/soft/${softconfig.name}" />
+		</pathconvert>
+	    <echo message="soft config exported to ${softconfig.full.path}" level="info"/>
+      </target>
+	  
+	   <!-- ================================= 
+          target: _register_soft_services              
+         ================================= -->
+    <target name="_register_soft_services" depends="_export_config" if="soft_server_installed">		            	  
+		<if>
+        	<available file="${softversion_converted}" type="dir"/>
+				<then>
+					<!-- stop  -->			
+					<ant antfile="${softversion_converted}/deploy/shared/build-deploy.xml" target="stop-soft" inheritall="false" dir="${softversion_converted}">
+						<property name="soft.server.type" value="TOMCAT"/>
+						<property file="${softconfig}"/>
+					</ant>
+					
+					<ant antfile="${softversion_converted}/deploy/shared/build-deploy.xml" target="uninstall-service-windows" inheritall="false" dir="${softversion_converted}">
+						<property name="soft.server.type" value="TOMCAT"/>
+						<property file="${softconfig}"/>
+					</ant>
+					
+					<ant antfile="${softversion_converted}/deploy/shared/build-deploy.xml" target="install-tomcat-service-windows" inheritall="false" dir="${softversion_converted}">
+						<property name="soft.server.type" value="TOMCAT"/>
+						<property file="${softconfig}"/>
+					</ant>
+					
+					<ant antfile="${softversion_converted}/deploy/shared/build-deploy.xml" target="start-soft" inheritall="false" dir="${softversion_converted}">
+						<property name="soft.server.type" value="TOMCAT"/>
+						<property file="${softconfig}"/>
+					</ant>
+			
+					<delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        	</then>
+        	<else>
+				 <delete dir="${tmpDir}" deleteonexit="true" failonerror="false"/>
+        		 <fail message="${softversion_converted} not found"/>
+        	</else>
+        </if>            	    	
+    </target>
+	
+</project>

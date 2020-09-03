@@ -1,0 +1,596 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!--
+	======================================================================
+	22 févr. 07 20:25:00 project : SOFTInstalller 
+	description : set tasksdefinition 
+	fxbrun
+	======================================================================
+-->
+<project name="taskdef-scripts">
+	
+	<!-- Generate script classpath  -->
+	<path id="install.script.classpath">
+		<fileset dir="${basedir}/lib">
+			<include name="*.jar" />
+		</fileset>
+		<pathelement location="${basedir}/lib" />
+	</path>
+
+	<!-- antcontrib -->
+	<taskdef resource="net/sf/antcontrib/antcontrib.properties" classpathref="install.script.classpath" loaderRef="scripts"/>	
+	<taskdef name="For" classname="net.sf.antcontrib.logic.ForTask" classpathref="install.script.classpath" loaderRef="scripts"/>
+	
+	<!-- required by SOFTMonitor deploy task -->
+	<taskdef name="for" classname="net.sf.antcontrib.logic.ForTask" classpathref="install.script.classpath" loaderRef="scripts"/>	
+	<taskdef name="xmltask" classname="com.oopsconsultancy.xmltask.ant.XmlTask" classpathref="install.script.classpath" loaderRef="scripts"/>
+    
+	<!-- required by EMS create task -->
+	<typedef name="PropertyMapping" classname="fr.squareit.soft.deployer.tibco.ant.PropertyMapping" classpathref="install.script.classpath" loaderRef="SOFTDeployerLoader"/>
+	<taskdef name="PropertyReplace" classname="fr.squareit.soft.deployer.tibco.shell.PropertyReplacerTask" classpathref="install.script.classpath" loaderRef="SOFTDeployerLoader"/>
+	
+	<!-- required by BC deploy task -->
+	<taskdef name="XmlReplace" classname="fr.squareit.soft.deployer.tibco.shell.XmlReplacerTask" classpathref="install.script.classpath" loaderRef="scripts"/>
+	
+	<!-- common -->
+	<taskdef name="SoftInstallerConfig" classname="fr.squareit.soft.config.ant.SoftInstallerConfigTask" classpathref="install.script.classpath" loaderRef="scripts"/>
+	<taskdef name="SoftDeployerConfig" classname="fr.squareit.soft.config.ant.SoftDeployerConfigTask" classpathref="script.classpath" loaderRef="scripts"/>
+	<taskdef name="EncryptFile" classname="fr.squareit.soft.config.ant.FileEncryptionTask" classpathref="install.script.classpath" loaderRef="scripts"/>		
+	<taskdef name="DecryptFile" classname="fr.squareit.soft.config.ant.FileDecryptionTask" classpathref="install.script.classpath" loaderRef="scripts"/>	
+	<taskdef name="formatXML" classname="fr.squareit.soft.deployer.tibco.ant.FormatXMLTask" classpathref="install.script.classpath" loaderRef="scripts"/>
+	
+	<!-- required EMS tasks -->
+	<typedef resource="ant.ext.properties" classpathref="install.script.classpath" loaderRef="scripts"/>
+	<typedef name="isLocalIpAddress" classname="fr.squareit.soft.config.ant.IsLocalIpAddress" classpathref="install.script.classpath" loaderRef="scripts"/>
+	
+   <!-- ===================================================================== -->
+    <!-- Macro startDomain			                                    -->
+    <!-- ===================================================================== -->
+    <macrodef name="startDomain">	
+        <sequential>   
+        	<echo message="start domain" level="info"/>
+        	<if>
+			<isset property="isWindows"/>
+			<then>
+				<if>
+					<available file="${TRA_executable}"/>					
+					<then>
+						<echo message="starting ${TRA_windows_service}" level="info"/>
+						<exec executable="cmd" failonerror="true">
+							<arg value="/c" />
+							<arg value="net start ${TRA_windows_service}"/>
+						</exec>
+					</then>
+				</if>
+				
+				<if>
+					<available file="${ADMIN_executable}"/>
+					<then>
+						<echo message="starting ${ADMIN_windows_service}" level="info"/>
+						<!-- admin is not necssary to fail -->
+						<exec executable="cmd" failonerror="false" spawn="true">
+							<arg value="/c" />
+							<arg value="net start ${ADMIN_windows_service}"/>
+						</exec>		
+					</then>
+				</if>							
+			</then>
+			<elseif>		     					    	   	
+				<isset property="isUnix"/>
+				<then>
+					<if>
+						<and>
+							<available file="${TRA_executable}"/>
+							<available file="${EXPL_SERVICES_DIR}/${TRA_unix_service}"/>
+						</and>
+						<then>
+							<echo message="starting ${TRA_unix_service}" level="info"/>
+							<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${TRA_unix_service}" spawn="false" failonerror="true">
+								<arg value="start" />
+							</exec>
+						</then>
+					</if>
+					
+					<if>
+						<and>
+							<available file="${ADMIN_executable}"/>
+							<available file="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}"/>
+						</and>
+						<then>
+							<echo message="starting ${ADMIN_unix_service}" level="info"/>
+							<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}" spawn="false" failonerror="true">
+								<arg value="start" />
+							</exec>
+						</then>
+					</if>
+
+   	   			</then>				
+			</elseif>	
+			<else>
+				<fail message="start domain not supported yet"/>
+			</else>		
+		</if>
+        </sequential>
+    </macrodef>	 
+	
+
+    <!-- ===================================================================== -->
+    <!-- Macro stopDomain			                                     -->
+    <!-- ===================================================================== -->
+    <macrodef name="stopDomain">
+    	<attribute name="failonerror" />
+        <sequential>   
+     		<echo message="stop domain" level="info"/>
+     		<if>	
+     			<isset property="isWindows"/>
+			<then>
+				<if>
+					<available file="${ADMIN_executable}"/>
+					<then>
+						<echo message="stopping ${ADMIN_windows_service}" level="info"/>
+						<exec executable="cmd" failonerror="@{failonerror}">
+							<arg value="/c" />
+							<arg value="net stop ${ADMIN_windows_service}"/>
+						</exec>		
+					</then>
+				</if>
+				<if>
+					<available file="${TRA_executable}"/>
+					<then>
+						<echo message="stopping ${TRA_windows_service}" level="info"/>
+						<exec executable="cmd" failonerror="@{failonerror}">
+							<arg value="/c" />
+							<arg value="net stop ${TRA_windows_service}"/>
+						</exec>
+					</then>
+				</if>
+								
+			</then>
+			<elseif>		     					    	   	
+				<isset property="isUnix"/>
+				<then>
+					<if>
+						<and>
+							<available file="${ADMIN_executable}"/>
+							<available file="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}"/>
+						</and>
+						<then>
+							<echo message="stopping ${ADMIN_unix_service}" level="info"/>
+							<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}" spawn="false" failonerror="@{failonerror}">
+								<arg value="stop" />
+							</exec>
+						</then>
+					</if>
+					
+					<if>
+						<and>
+							<available file="${TRA_executable}"/>
+							<available file="${EXPL_SERVICES_DIR}/${TRA_unix_service}"/>
+						</and>
+						<then>
+							<echo message="stopping ${TRA_unix_service}" level="info"/>
+							<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${TRA_unix_service}" spawn="false" failonerror="@{failonerror}">
+								<arg value="stop" />
+							</exec>
+						</then>
+					</if>					
+				</then>				
+			</elseif>	
+			<else>
+				<fail message="stop domain not supported yet"/>
+			</else>		
+		</if>								
+        </sequential>
+    </macrodef>
+	
+	
+	<!-- ===================================================================== -->
+    <!-- Macro startAdminDomain			                                    -->
+    <!-- ===================================================================== -->
+    <macrodef name="startAdminDomain">	
+        <sequential>   
+        	<echo message="start admin" level="info"/>
+        	<if>
+			<isset property="isWindows"/>
+			<then>				
+				<if>
+					<available file="${ADMIN_executable}"/>
+					<then>
+						<echo message="starting ${ADMIN_windows_service}" level="info"/>
+						<!-- admin is not necssary to fail -->
+						<exec executable="cmd" failonerror="false" spawn="true">
+							<arg value="/c" />
+							<arg value="net start ${ADMIN_windows_service}"/>
+						</exec>		
+					</then>
+				</if>							
+			</then>
+			<elseif>		     					    	   	
+				<isset property="isUnix"/>
+				<then>					
+					<if>
+						<and>
+							<available file="${ADMIN_executable}"/>
+							<available file="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}"/>
+						</and>
+						<then>
+							<echo message="starting ${ADMIN_unix_service}" level="info"/>
+							<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}" spawn="false" failonerror="true">
+								<arg value="start" />
+							</exec>
+						</then>
+					</if>
+
+   	   			</then>				
+			</elseif>	
+			<else>
+				<fail message="start admin domain not supported yet"/>
+			</else>		
+		</if>
+        </sequential>
+    </macrodef>	 
+	
+
+    <!-- ===================================================================== -->
+    <!-- Macro stopAdminDomain			                                     -->
+    <!-- ===================================================================== -->
+    <macrodef name="stopAdminDomain">
+    	<attribute name="failonerror" />
+        <sequential>   
+     		<echo message="stop admin" level="info"/>
+     		<if>	
+     			<isset property="isWindows"/>
+			<then>
+				<if>
+					<available file="${ADMIN_executable}"/>
+					<then>
+						<echo message="stopping ${ADMIN_windows_service}" level="info"/>
+						<exec executable="cmd" failonerror="@{failonerror}">
+							<arg value="/c" />
+							<arg value="net stop ${ADMIN_windows_service}"/>
+						</exec>		
+					</then>
+				</if>											
+			</then>
+			<elseif>		     					    	   	
+				<isset property="isUnix"/>
+				<then>
+					<if>
+						<and>
+							<available file="${ADMIN_executable}"/>
+							<available file="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}"/>
+						</and>
+						<then>
+							<echo message="stopping ${ADMIN_unix_service}" level="info"/>
+							<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}" spawn="false" failonerror="@{failonerror}">
+								<arg value="stop" />
+							</exec>
+						</then>
+					</if>														
+				</then>				
+			</elseif>	
+			<else>
+				<fail message="stop admin domain not supported yet"/>
+			</else>		
+		</if>								
+        </sequential>
+    </macrodef>
+	
+	
+	 <!-- ===================================================================== -->
+    <!-- Macro startHawkDomain			                                    	-->
+    <!-- ===================================================================== -->
+    <macrodef name="startHawkDomain">	
+        <sequential>   
+        	<echo message="start Hawk agent domain" level="info"/>
+        	<if>
+			<isset property="isWindows"/>
+			<then>
+				<if>
+					<available file="${TRA_executable}"/>					
+					<then>
+						<echo message="starting ${TRA_windows_service}" level="info"/>
+						<exec executable="cmd" failonerror="true">
+							<arg value="/c" />
+							<arg value="net start ${TRA_windows_service}"/>
+						</exec>
+					</then>
+				</if>												
+			</then>
+			<elseif>		     					    	   	
+				<isset property="isUnix"/>
+				<then>
+					<if>
+						<and>
+							<available file="${TRA_executable}"/>
+							<available file="${EXPL_SERVICES_DIR}/${TRA_unix_service}"/>
+						</and>
+						<then>
+							<echo message="starting ${TRA_unix_service}" level="info"/>
+							<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${TRA_unix_service}" spawn="false" failonerror="true">
+								<arg value="start" />
+							</exec>
+						</then>
+					</if>										
+   	   			</then>				
+			</elseif>	
+			<else>
+				<fail message="start domain not supported yet"/>
+			</else>		
+		</if>
+        </sequential>
+    </macrodef>	 
+	
+
+    <!-- ===================================================================== -->
+    <!-- Macro stopHawkDomain			                                     	-->
+    <!-- ===================================================================== -->
+    <macrodef name="stopHawkDomain">
+    	<attribute name="failonerror" />
+        <sequential>   
+     		<echo message="stop Hawk agent domain" level="info"/>
+     		<if>	
+     			<isset property="isWindows"/>
+			<then>				
+				<if>
+					<available file="${TRA_executable}"/>
+					<then>
+						<echo message="stopping ${TRA_windows_service}" level="info"/>
+						<exec executable="cmd" failonerror="@{failonerror}">
+							<arg value="/c" />
+							<arg value="net stop ${TRA_windows_service}"/>
+						</exec>
+					</then>
+				</if>								
+			</then>
+			<elseif>		     					    	   	
+				<isset property="isUnix"/>
+				<then>					
+					<if>
+						<and>
+							<available file="${TRA_executable}"/>
+							<available file="${EXPL_SERVICES_DIR}/${TRA_unix_service}"/>
+						</and>
+						<then>
+							<echo message="stopping ${TRA_unix_service}" level="info"/>
+							<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${TRA_unix_service}" spawn="false" failonerror="@{failonerror}">
+								<arg value="stop" />
+							</exec>
+						</then>
+					</if>					
+				</then>				
+			</elseif>	
+			<else>
+				<fail message="stop domain not supported yet"/>
+			</else>		
+		</if>								
+        </sequential>
+    </macrodef>	
+    
+	 <!-- ===================================================================== -->
+    <!-- Macro checkDomain			                                    -->
+    <!-- ===================================================================== -->
+    <macrodef name="checkDomain">
+		<attribute name="status" />
+        <sequential>   
+        	<echo message="check domain status @{status}" level="info"/>
+        	<if>
+				<isset property="isWindows"/>
+				<then>
+					<if>
+						<available file="${TRA_executable}"/>					
+						<then>							
+							<exec executable="cmd" failonerror="true" outputproperty="tra_status" >
+								<arg value="/c" />
+								<arg value="sc query ${TRA_windows_service}"/>
+							</exec>
+							
+							<if>
+								<and>
+									<contains string="${tra_status}" substring="STOPPED" casesensitive="false"/>
+									<equals arg1="@{status}" arg2="started" casesensitive="false" trim="true" />
+								</and>
+								<then>
+									<fail message="${TRA_windows_service} not started"/>
+								</then>
+							</if>
+							
+							<if>
+								<and>
+									<contains string="${tra_status}" substring="RUNNING" casesensitive="false"/>
+									<equals arg1="@{status}" arg2="stopped" casesensitive="false" trim="true" />
+								</and>
+								<then>
+									<fail message="${TRA_windows_service} not stopped"/>
+								</then>
+							</if>
+							<echo message="${TRA_windows_service} @{status}" level="info"/>
+						</then>
+					</if>
+					
+					<if>
+						<available file="${ADMIN_executable}"/>
+						<then>							
+							<exec executable="cmd" failonerror="true" outputproperty="admin_status">
+								<arg value="/c" />
+								<arg value="sc query ${ADMIN_windows_service}"/>
+							</exec>
+							
+							<if>
+								<and>
+									<contains string="${admin_status}" substring="STOPPED" casesensitive="false"/>
+									<equals arg1="@{status}" arg2="started" casesensitive="false" trim="true" />
+								</and>
+								<then>
+									<fail message="${ADMIN_windows_service} not started"/>
+								</then>
+							</if>
+							
+							<if>
+								<and>
+									<contains string="${admin_status}" substring="RUNNING" casesensitive="false"/>
+									<equals arg1="@{status}" arg2="stopped" casesensitive="false" trim="true" />
+								</and>
+								<then>
+									<fail message="${ADMIN_windows_service} not stopped"/>
+								</then>
+							</if>
+							
+							<echo message="${ADMIN_windows_service} @{status}" level="info"/>
+						</then>
+					</if>							
+				</then>
+				<elseif>		     					    	   	
+					<isset property="isUnix"/>
+					<then>
+						<if>
+							<and>
+								<available file="${TRA_executable}"/>
+								<available file="${EXPL_SERVICES_DIR}/${TRA_unix_service}"/>
+							</and>
+							<then>								
+								<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${TRA_unix_service}" spawn="false" failonerror="false" resultproperty="tra_status">
+									<arg value="status" />
+								</exec>
+								
+								<if>
+									<and>
+										<equals arg1="${tra_status}" arg2="1" casesensitive="false"/>
+										<equals arg1="@{status}" arg2="started" casesensitive="false" trim="true" />
+									</and>
+									<then>
+										<fail message="${TRA_unix_service} not started"/>
+									</then>
+								</if>
+								
+								<if>
+									<and>
+										<equals arg1="${tra_status}" arg2="0" casesensitive="false"/>
+										<equals arg1="@{status}" arg2="stopped" casesensitive="false" trim="true" />
+									</and>
+									<then>
+										<fail message="${TRA_unix_service} not stopped"/>
+									</then>
+								</if>
+								
+								<echo message="${TRA_unix_service} @{status}" level="info"/>
+							</then>
+						</if>
+						
+						<if>
+							<and>
+								<available file="${ADMIN_executable}"/>
+								<available file="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}"/>
+							</and>
+							<then>								
+								<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${ADMIN_unix_service}" spawn="false" failonerror="false" resultproperty="admin_status">
+									<arg value="status" />
+								</exec>
+								
+								<if>
+									<and>
+										<equals arg1="${admin_status}" arg2="1" casesensitive="false"/>
+										<equals arg1="@{status}" arg2="started" casesensitive="false" trim="true" />
+									</and>
+									<then>
+										<fail message="${ADMIN_unix_service} not started"/>
+									</then>
+								</if>
+								
+								<if>
+									<and>
+										<equals arg1="${admin_status}" arg2="0" casesensitive="false"/>
+										<equals arg1="@{status}" arg2="stopped" casesensitive="false" trim="true" />
+									</and>
+									<then>
+										<fail message="${ADMIN_unix_service} not stopped"/>
+									</then>
+								</if>
+								
+								<echo message="${ADMIN_unix_service} @{status}" level="info"/>
+							</then>
+						</if>
+					</then>				
+				</elseif>	
+				<else>
+					<fail message="start domain not supported yet"/>
+				</else>		
+			</if>
+        </sequential>
+    </macrodef>
+    
+   <!-- ===================================================================== -->
+    <!-- Macro startEMS			                                    -->
+    <!-- ===================================================================== -->
+    <macrodef name="startEMS">
+	<attribute name="configDir" />	
+	<attribute name="configFile" />
+	<attribute name="port" />
+        <sequential>           	
+        	<if>
+			<isset property="isWindows"/>
+			<then>
+				<echo message="starting EMS: ${EMS_windows_service}_@{port}" level="info"/>
+				<exec executable="cmd" failonerror="true">
+					<arg value="/c" />
+					<arg value="net start ${EMS_windows_service}_@{port}"/>
+				</exec>
+			</then>
+			<elseif>		     					    	   	
+				<available file="${EXPL_SERVICES_DIR}/${EMS_unix_service}_@{port}"/>
+				<then>
+					<echo message="starting EMS: ${EMS_unix_service}_@{port}" level="info"/>
+					<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${EMS_unix_service}_@{port}" spawn="false" failonerror="@{failonerror}">
+						<arg value="start" />
+					</exec>
+				</then>
+			</elseif>
+			<else>
+				<echo message="starting EMS: ${EMS_executable} @{configFile}" level="info"/>		     		
+			    	<exec dir="@{configDir}" executable="${EMS_executable}" spawn="true">
+			    	  <arg line="-config '@{configFile}'"/>
+			    	</exec>     		
+			</else>
+		</if>
+        </sequential>
+    </macrodef>	 
+	
+
+    <!-- ===================================================================== -->
+    <!-- Macro stopEMS			                                     -->
+    <!-- ===================================================================== -->
+    <macrodef name="stopEMS">
+	<attribute name="serverAdress" />	
+	<attribute name="port" />
+	<attribute name="user" />
+	<attribute name="password" />
+	<attribute name="failonerror" />
+        <sequential>        		
+     		<if>	
+     			<isset property="isWindows"/>
+			<then>
+				<echo message="stopping EMS: ${EMS_windows_service}_@{port}" level="info"/>
+				<exec executable="cmd" failonerror="@{failonerror}">
+					<arg value="/c" />
+					<arg value="net stop ${EMS_windows_service}_@{port}"/>
+				</exec>
+			</then>
+			<elseif>		     					    	   	
+				<available file="${EXPL_SERVICES_DIR}/${EMS_unix_service}_@{port}"/>
+				<then>
+					<echo message="stopping EMS: ${EMS_unix_service}_@{port}" level="info"/>
+					<exec dir="${EXPL_SERVICES_DIR}" executable="${EXPL_SERVICES_DIR}/${EMS_unix_service}_@{port}" spawn="false" failonerror="@{failonerror}">
+						<arg value="stop" />
+					</exec>
+				</then>
+			</elseif>
+			<else>
+				<echo message="stopping EMS: @{serverAdress}" level="info"/>
+		     		<exec dir="${basedir}" executable="${EMS_admin_executable}" failonerror="@{failonerror}">
+					<arg line="-server @{serverAdress} -user @{user} -password @{password} -ignore -script '${basedir}/lib/stopEMS.txt'"/>
+				</exec>	
+			</else>
+		</if>								
+        </sequential>
+    </macrodef>		
+        
+</project>

@@ -1,0 +1,492 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!-- ====================================================================== 
+     22 févr. 07 10:48:43                                                        
+
+     project  : SOFTInstalller
+     description : Administration du Domaine TIBCO
+                   
+     fxbrun                                                                
+     ====================================================================== -->
+<project name="SOFTInstalller" default="create_installation" basedir="..">
+    	
+	 <!-- include task definition -->
+	 <import file="${basedir}/common/taskdef-scripts.xml"/>
+	
+	 <!-- include install definition -->
+	 <import file="${basedir}/common/scripts_definition.xml"/>
+
+	<!-- include filter definition -->
+	<import file="${basedir}/common/filters.xml"/>
+
+	
+	<!-- ================================= 
+	     target: create_installation              
+	 ================================= -->
+	<target name="create_installation" depends="_create_installation,_drop_application,_create_application,_deploy_application,_export_domain_config,_create_services,_delete_tra_files,_delete_jdbc_config"/>
+	
+	<!-- ================================= 
+	     target: create_application              
+	 ================================= -->
+	<target name="create_application" depends="_drop_application,_create_application,_export_domain_config,_create_services,_delete_tra_files,_delete_jdbc_config"/>
+			
+	<!-- ================================= 
+	    target: deploy_application              
+	 ================================= -->
+	<target name="deploy_application" depends="_deploy_application,_export_domain_config,_create_services,_delete_tra_files,_delete_jdbc_config"/>
+		
+	<!-- ================================= 
+	    target: export_application              
+	 ================================= -->
+	<target name="export_application" depends="_export_application,_delete_tra_files,_delete_jdbc_config"/>
+	
+	<!-- ================================= 
+	    target: export_installation              
+	 ================================= -->
+	<target name="export_installation" depends="_export_installation,_delete_tra_files,_delete_jdbc_config"/>
+	
+	<!-- ================================= 
+	    target: deploy_gateway              
+	 ================================= -->
+	<target name="deploy_gateway" depends="_deploy_gateway,_export_domain_config"/>
+		
+	<!-- ================================= 
+	    target: create_gateway_services              
+	 ================================= -->
+	<target name="create_gateway_services" depends="_deploy_gateway_windows,_deploy_gateway_unix,_export_domain_config"/>
+	
+    <!-- ================================= 
+       target: loadConfig              
+    ================================= -->
+    <target name="_loadConfigInit" depends="_loadEnvironement"> 
+	
+	<!-- convert before filters -->
+	<pathconvert property="tibco_bc_dir_converted">
+		<path location="${tibco_bcengine_dir}" />
+	</pathconvert>
+		    	
+	<condition property="tibco_bc_installed">
+		<and>
+			<available file="${tibco_bcengine_dir}" type="dir"/>
+			<available file="${TRA_executable_dir}" type="dir"/> 
+		</and>
+	</condition>	
+
+	<available file="${TRA_executable_dir}" type="dir" property="hawk_agent_configured"/> 
+	<available file="${TRA_default_conf_admin}" property="default_tra_exists"/>		 
+
+	<!-- check existence of unix exploitation scripts -->
+	<available file="${EXPL_SERVICES_DIR}/${TRA_unix_service}" property="domain_scripts_exists"/>
+					
+	
+    </target>	
+	
+	<!-- ================================= 
+          target: loadConfig              
+         ================================= -->
+    <target name="_loadConfig" depends="_loadConfigInit,define_filters"/> 
+	
+	
+	 <!-- ================================= 
+	      target: _copy_tra_files              
+	  ================================= -->
+	<target name="_copy_tra_files" depends="_loadConfig" if="hawk_agent_configured"> 
+		<mkdir dir="${TRA_default_dir}"/>
+		<copy todir="${TRA_default_dir}" overwrite="true">
+			<fileset dir="${TRA_executable_dir}">
+				<include name="*.properties"/>
+				<include name="*.cfg"/>
+			</fileset>
+		</copy>		
+	</target>
+	
+	
+	 <!-- ================================= 
+	      target: _delete_tra_files              
+	  ================================= -->
+	<target name="_delete_tra_files" depends="_loadConfig"> 
+		<delete dir="${TRA_default_dir}" failonerror="false" includeemptydirs="true" />				
+	</target>
+	
+	 <!-- ================================= 
+	      target: _create_jdbc_config              
+	  ================================= -->
+	<target name="_create_jdbc_config" depends="_loadConfig"> 
+		<tempfile destdir="${java.io.tmpdir}" property="jdbc.config" prefix="jdbc_" suffix=".properties"/>
+		<echo message="Config file is ${jdbc.config}" level="info"/>
+		
+		<echo message="bc.repo.db.driver=${BC_datasource_driver}${line.separator}"  file="${jdbc.config}" append="false" />
+		<echo message="bc.repo.db.url=${BC_datasource_url}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.repo.db.userID=${BC_datasource_username}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.repo.db.password=${BC_datasource_password}${line.separator}"  file="${jdbc.config}" append="true" />
+		
+		<echo message="bc.audit.db.driver=${BC_datasource_driver}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.audit.db.url=${BC_datasource_url}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.audit.db.userID=${BC_datasource_username}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.audit.db.password=${BC_datasource_password}${line.separator}"  file="${jdbc.config}" append="true" />
+		
+		<echo message="bc.nr.db.driver=${BC_datasource_driver}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.nr.db.url=${BC_datasource_url}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.nr.db.userID=${BC_datasource_username}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.nr.db.password=${BC_datasource_password}${line.separator}"  file="${jdbc.config}" append="true" />
+		
+		<echo message="bc.runtime.db.driver=${BC_datasource_driver}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.runtime.db.url=${BC_datasource_url}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.runtime.db.userID=${BC_datasource_username}${line.separator}"  file="${jdbc.config}" append="true" />
+		<echo message="bc.runtime.db.password=${BC_datasource_password}${line.separator}"  file="${jdbc.config}" append="true" />
+	</target>
+	
+	 <!-- ================================= 
+	      target: _delete_jdbc_config              
+	  ================================= -->
+	<target name="_delete_jdbc_config" if="jdbc.config"> 
+		<delete file="${jdbc.config}" failonerror="false"/>
+	</target>
+	
+	 <!-- ================================= 
+	      target: _create_installation              
+	  ================================= -->
+	<target name="_create_installation" depends="_loadConfig,_copy_tra_files,_create_jdbc_config,_create_domain_services" if="tibco_bc_installed"> 				
+		
+		<property name="bc.tmpdir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}/bc"/>
+		<delete dir="${bc.tmpdir}" failonerror="false" includeemptydirs="true"/>
+		<mkdir dir="${bc.tmpdir}"/>
+		
+		<!-- invoke tibco cmdline tool -->
+		<echo message="Creating BC installation, prefix:${BC_installation_prefix}..." level="info"/>
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="true">
+			 <arg line="-createInstallation -prefix ${BC_installation_prefix} -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -configRepoURL file://${jdbc.config} -overwrite"/>
+		</exec>   
+		
+		<!-- activate protocol --> 	  			
+		<echo message="Activating protocols" level="info"/>
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="true">
+			 <arg line="-activateProtocol -protocol EZComm -configRepoURL file://${jdbc.config} -tmpdir ${bc.tmpdir}"/>
+		</exec> 
+		<delete dir="${bc.tmpdir}" failonerror="false" includeemptydirs="true"/>
+		
+		<!-- import settings -->
+		<if>
+			<available  file="${basedir}/${templates.dir}/bc/${BC_installation_csx}"/>
+			<then>
+				<!-- import settings -->
+				<echo message="Importing installation settings" level="info"/>
+				<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="true">
+					 <arg line="-importConfigRepo -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -configRepoURL file://${jdbc.config} -csx ${basedir}/${templates.dir}/bc/${BC_installation_csx}"/>
+				</exec> 
+				
+				<!-- import operations -->
+				<echo message="Importing operations" level="info"/>
+				<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="true">
+					 <arg line="-importConfigRepo -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -configRepoURL file://${jdbc.config} -csx ${basedir}/${templates.dir}/bc/${BC_operations_ezcomm_csx}"/>
+				</exec> 
+				
+				<!-- import participants --> 	  
+				<echo message="Importing participants" level="info"/>
+				<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="true">
+					 <arg line="-importConfigRepo -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -configRepoURL file://${jdbc.config} -csx ${basedir}/${templates.dir}/bc/${BC_participants_csx}"/>
+				</exec> 
+		
+			</then>
+			<else>
+				<echo message="Installation settings skipped because setting file ${basedir}/${templates.dir}/bc/${BC_installation_csx} not found" level="info"/>
+			</else>
+		</if>
+		
+		
+		
+		<!-- restart domain 
+		<stopDomain failonerror="false"/>
+		<startDomain/>
+		-->	
+		<!-- wait -->
+		<antcall target="_wait-admin-start" inheritall="true"/>
+			
+	</target>
+	
+	 <!-- ================================= 
+		  target: _create_application              
+	 ================================= -->
+	<target name="_create_application" depends="_loadConfig,_copy_tra_files,_create_jdbc_config,_create_domain_services" if="tibco_bc_installed"> 
+		
+		<!-- check status started -->
+		<checkDomain status="started"/>
+				
+		<!-- create app --> 	  
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="true">
+		  	 <arg line="-createApp -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -configRepoURL file://${jdbc.config}"/>
+		</exec> 
+	</target>
+	
+	<!-- ================================= 
+	  target: _drop_application              
+	================================= -->
+	<target name="_drop_application" depends="_loadConfig,_copy_tra_files,_create_jdbc_config,_create_domain_services" if="tibco_bc_installed"> 
+		
+		<!-- check status started -->
+		<checkDomain status="started"/>
+		
+		<!-- undeploy app --> 	  
+		<if>
+			<available file="${BC_Interior_exec_dir}" type="dir"/>			
+			<then>
+				<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="false">
+					 <arg line="-undeployApp -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -configRepoURL file://${jdbc.config}"/>
+				</exec>
+			</then>
+		</if>
+		
+		<!-- delete app --> 	  
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="false">
+		  	 <arg line="-deleteApp -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -configRepoURL file://${jdbc.config}"/>
+		</exec> 		
+	</target>
+	  
+	<!-- ================================= 
+	  target: _deploy_application              
+	================================= -->
+	<target name="_deploy_application" depends="_loadConfig,_copy_tra_files,_create_jdbc_config,_create_domain_services" if="tibco_bc_installed"> 
+		
+		<!-- check status started -->
+		<checkDomain status="started"/>		
+		
+		<property name="tmpDir" value="${java.io.tmpdir}/${user.name}/${TRA_domain}"/>
+		<delete dir="${tmpDir}" failonerror="false" includeemptydirs="true"/>
+		<mkdir dir="${tmpDir}"/>	
+
+		<!-- Replace -->
+		<echo message="Deploy config is ${basedir}/${templates.dir}/bc/${BC_app_xml}"/>
+		<XmlReplace earConfigFile="${basedir}/${templates.dir}/bc/${BC_app_xml}"
+					appPropertyFile="${basedir}/properties/static/deploy.properties"
+		            output="${tmpDir}/deployBC.xml"/>	
+		
+		
+		<echo message="bc.appmanage.interior.hosts=${BC_host}${line.separator}"
+					  file="${tmpDir}/bindingsBC.properties" append="false" />
+		
+		<echo message="bc.appmanage.interior.${BC_host}.1.ntservice=automatic"
+					  file="${tmpDir}/bindingsBC.properties" append="true" />
+		
+		<!-- import config -->   
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="true">
+		  	 <arg line="-importDeployConfig -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -config ${basedir}/${templates.dir}/bc/${BC_app_xml} -bindings ${tmpDir}/bindingsBC.properties"/>
+		</exec> 
+				
+		<!-- deploy -->
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="true">
+		  	 <arg line="-deployApp -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -configRepoURL file://${jdbc.config} -nostart"/>
+		</exec>
+		
+		<delete dir="${tmpDir}" failonerror="false" includeemptydirs="true"/>
+		
+	</target>
+	
+	<!-- ================================= 
+	  target: _deploy_gateway              
+	================================= -->
+	<target name="_deploy_gateway" depends="_create_jdbc_config,_create_domain_services" if="tibco_bc_installed"> 
+		
+		<!-- create security token  -->	  
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="true">
+			 <arg line="-createGatewayToken -name ${BC_gateway_security_token_name} -managementPort ${BC_gateway_managementPort} -dataPort ${BC_gateway_dataPort} -exportPath '${BC_gateway_security_token}' -overwrite -configRepoURL file://${jdbc.config}"/>
+		</exec>
+		
+		<!-- create tra file  -->
+		<copy file="${BC_gateway_tra_template}" tofile="${BC_gateway_tra}" overwrite="true">
+			<filterchain>
+				<tokenfilter>				
+					<replaceregex pattern="(java.property.gs.logger.dir).*" replace="\1=${TIBCO_LOGS}/bc_gateway" byline="true" />
+					<replaceregex pattern="(java.property.gs.securetoken.file).*" replace="\1=${BC_gateway_security_token_file_name}" byline="true" />
+					<replaceregex pattern="(java.property.gs.startup.retry.count).*" replace="\1=-1" byline="true" />
+					<replaceregex pattern="(ntservice.displayname).*" replace="\1=${BC_Gateway_windows_service}" byline="true" />
+					<replaceregex pattern="(ntservice.name).*" replace="\1=${BC_Gateway_windows_service}" byline="true"/>
+					<replaceregex pattern="(ntservice.starttype).*" replace="\1=automatic" byline="true" />
+					<replaceregex pattern="(java.property.gs.logger.level).*" replace="\1=ERROR" byline="true" />
+				</tokenfilter>
+			</filterchain>
+		</copy>
+		
+		<!-- deploy windows -->
+		<runtarget target="_deploy_gateway_windows"/>
+		
+		<!-- deploy unix -->
+		<runtarget target="_deploy_gateway_unix"/>
+
+	</target>
+	
+	<!-- ================================= 
+	  target: _deploy_gateway_windows              
+	================================= -->
+	<target name="_deploy_gateway_windows" if="isWindows"> 
+				
+		<!-- stop service -->  
+		<echo message="Stopping windows gateway service"/>
+		<exec executable="cmd" failonerror="false">
+			<arg value="/c" />
+			<arg value="net stop ${BC_Gateway_windows_service}"/>
+		</exec>
+		
+		<!-- uninstall service -->   
+		<echo message="Uninstall windows gateway service"/>
+		<exec executable="cmd" failonerror="false">
+			<arg value="/c" />
+			<arg value="sc delete ${BC_Gateway_windows_service}"/>
+		</exec>
+		
+		<!-- install service -->   
+		<echo message="Install windows gateway service"/>
+		<exec dir="${BC_gateway_executable_dir}" executable="${BC_gateway_executable}" spawn="false" failonerror="true">
+		  	 <arg line="--install --propFile '${BC_gateway_tra}'"/>
+		</exec> 
+		
+		<!-- start service --> 
+		<echo message="Starting windows gateway service ${BC_Gateway_windows_service} spawned.."/>
+		<exec executable="cmd" failonerror="false" spawn="true">
+			<arg value="/c" />
+			<arg value="net start ${BC_Gateway_windows_service}"/>
+		</exec>
+	</target>
+	
+	
+	<!-- ================================= 
+	  target: _deploy_gateway_unix              
+	================================= -->
+	<target name="_deploy_gateway_unix" if="isUnix"> 
+			<!-- make start/stop -->
+	    <mkdir dir="${EXPL_SERVICES_DIR}"/>
+		
+		<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+			<fileset dir="${expl.os.template.dir}">
+		   	   	<include name="BC-Gateway*"/>
+			</fileset>
+			<filterset refid="filters.domains"/>      	   
+			<filterset refid="filters.exploitation"/>
+		   	<filterset refid="filters.bc"/>			    		
+			<mergemapper to="${BC_Gateway_unix_service}"/> 
+		</copy>									
+	    		
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SERVICES_DIR}" includes="${BC_Gateway_unix_service}"/>
+		</chmod>	
+		
+	</target>
+	
+	<!-- ================================= 
+	  target: _export_application              
+	================================= -->
+	<target name="_export_application" depends="_loadConfig,_copy_tra_files,_create_domain_services" if="tibco_bc_installed"> 
+		
+		<!-- check status started -->
+		<checkDomain status="started"/>		
+		
+		<mkdir dir="${BC_domain_dir}/${BC_version}"/>
+		
+		<!-- invoke tibco cmdline tool --> 	  
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="false">
+		  	 <arg line="-exportDeployConfig -domain ${TRA_domain} -user ${TRA_domain_user} -pw ${TRA_domain_password} -out ${BC_domain_dir}/${BC_app_xml} -overwrite"/>
+		</exec>
+		
+	</target>
+	
+	<!-- ================================= 
+	  target: _export_installation              
+	================================= -->
+	<target name="_export_installation" depends="_loadConfig,_copy_tra_files,_create_jdbc_config" if="tibco_bc_installed"> 
+				
+		<mkdir dir="${BC_domain_dir}/${BC_version}"/>
+		
+		<!-- invoke tibco cmdline tool --> 	  
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="false">
+		  	 <arg line="-exportConfigRepo -configRepoURL file://${jdbc.config} -csx ${BC_domain_dir}/${BC_installation_csx} -overwrite"/>
+		</exec>
+		
+		<!-- invoke tibco cmdline tool --> 	  
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="false">
+		  	 <arg line="-exportConfigRepo -configRepoURL file://${jdbc.config} -category participants -csx ${BC_domain_dir}/${BC_participants_csx} -overwrite"/>
+		</exec>
+		
+		<!-- invoke tibco cmdline tool --> 	  
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="false">
+		  	 <arg line="-exportConfigRepo -configRepoURL file://${jdbc.config} -category operations -protocol EZComm -csx ${BC_domain_dir}/${BC_operations_ezcomm_csx} -overwrite"/>
+		</exec>
+		
+		<!-- invoke tibco cmdline tool --> 	  
+		<exec dir="${BC_appmanage_dir}" executable="${BC_appmanage_exec}" spawn="false" failonerror="false">
+		  	 <arg line="-exportConfigRepo -configRepoURL file://${jdbc.config} -category operations -protocol Gateway -csx ${BC_domain_dir}/${BC_operations_gateway_csx} -overwrite"/>
+		</exec>
+		
+	</target>
+	
+	 <!-- ================================= 
+	       target: create_services              
+	  ================================= -->
+	 <target name="_create_services" depends="_loadConfig" if="expl.os.template.dir">	
+	   	
+		<!-- make start/stop -->
+	    <mkdir dir="${EXPL_SERVICES_DIR}"/>
+
+		<if>		
+			<available file="${BC_Interior_executable}"/>
+			<then>
+			    	<copy todir="${EXPL_SERVICES_DIR}" overwrite="true"> 
+					<fileset dir="${expl.os.template.dir}">
+			    	   		<include name="BC-SingleServer*"/>
+					</fileset>
+					<filterset refid="filters.domains"/>      	   
+					<filterset refid="filters.exploitation"/>
+			    	<filterset refid="filters.bc"/>			    		
+					<mergemapper to="${BC_Interior_unix_service}"/> 
+				</copy>
+			</then>
+		</if>						
+	    		
+		<chmod perm="ug+x">
+			<fileset dir="${EXPL_SERVICES_DIR}" includes="${BC_Interior_unix_service}"/>
+		</chmod>		
+	</target>
+	
+	 <!-- ================================= 
+	       target: _create_domain_services              
+	  ================================= -->
+	<target name="_create_domain_services" depends="_loadConfig" unless="domain_scripts_exists">		
+		<!-- call  --> 
+		<ant antfile="${basedir}/ant/manageDomain.xml" 
+			 target="_create_services" 
+			 inheritall="false"/>			 		
+	</target>
+	
+	 <!-- ================================= 
+			target : wait admin to start                
+	  ================================= -->
+	<target name="_wait-admin-start">
+		<echo message="Wait until admin server started" level="info"/>
+		<var name="admin.server.started" unset="true"/>			
+		<for list="${wait.for.list}" param="tries">
+			<sequential>
+				<if>
+					<not><isset property="admin.server.started"/></not>
+					<then>					
+						<if>
+							<not><http url="http://${TRA_domain_host}:${TRA_domain_http_port}"/></not>					
+							<then>
+								<echo message="try @{tries}"/>						
+								<sleep seconds="${wait.for.waittime}"/>
+							</then>
+							<else>						
+								<property name="admin.server.started" value="true"/>	
+								<echo message="Admin server started"/>
+							</else>
+						</if>
+					</then>
+				</if>
+			</sequential>						
+		</for>								
+		<if>
+			<not>
+				<isset property="admin.server.started"/>
+			</not>
+			<then>
+				<fail message="Admin server did not started within timeout"/>
+			</then>
+		</if>
+	</target>
+</project>
