@@ -1,0 +1,18 @@
+#----------------------------------------------------------------------------------------
+# This file contains install instructions, syntax is A=B=C=D
+# for installers 		: install_without_extension=fileInfosVersion (used to see if product already installed, under TIBCO_ROOT/_installInfo)
+# for old installers 	: install_without_extension=existing file or directory under TIBCO_ROOT to see if product already installed=responseFile under common/responseFiles=options to pass to installer
+# for simpleHotfixes	: hotfix_without_extension=existing file or directory under TIBCO_ROOT to see if product already installed=directory to unzip the fix (if not set, tibco_root is used)
+#----------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------
+# Linux x64
+## Socle
+03-TIB_ems_8.4.1_linux_x86_64=ems_8.4.1.000_prodInfo.xml
+
+# Hotfixes (Installation avec Universal Installer)
+
+# Simple hotfixes (Installation par unzip)
+## EMS
+###### Attention : Hotfixes 6 pour EMS cumulatif
+TIB_ems_8.4.1_HF-006_linux_x86_64=ems/8.4/TIB_ems_8.4.1_HF-006_readme.txt=ems/8.4
+
